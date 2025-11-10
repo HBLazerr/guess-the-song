@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getAccessToken } from '@/lib/spotify'
-import type { SpotifyUser, SpotifyArtist, SpotifyTrack, Track, GameMode } from '@/types'
+import type { SpotifyUser, SpotifyArtist, SpotifyAlbum, SpotifyTrack, Track, GameMode } from '@/types'
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1'
 
@@ -103,6 +103,40 @@ export function useSpotify() {
     }
   }
 
+  const fetchArtistAlbums = async (artistId: string): Promise<SpotifyAlbum[]> => {
+    try {
+      const data = await fetchWithToken(
+        `${SPOTIFY_API_BASE}/artists/${artistId}/albums?include_groups=album,single&market=US&limit=50`
+      )
+      return data.items
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch artist albums')
+      throw err
+    }
+  }
+
+  const fetchAlbumTracks = async (albumId: string): Promise<SpotifyTrack[]> => {
+    try {
+      const data = await fetchWithToken(`${SPOTIFY_API_BASE}/albums/${albumId}/tracks?market=US`)
+      // Album tracks don't include full track info, so we need to enrich them
+      const album = await fetchWithToken(`${SPOTIFY_API_BASE}/albums/${albumId}`)
+
+      return data.items.map((track: any) => ({
+        id: track.id,
+        name: track.name,
+        artists: track.artists,
+        album: {
+          name: album.name,
+          images: album.images,
+        },
+        preview_url: track.preview_url,
+      }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch album tracks')
+      throw err
+    }
+  }
+
   // Helper function to batch requests with delays to avoid rate limiting
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -137,12 +171,16 @@ export function useSpotify() {
     return results
   }
 
-  const getTracksForMode = async (mode: GameMode): Promise<Track[]> => {
+  const getTracksForMode = async (
+    mode: GameMode,
+    artistId?: string,
+    albumId?: string
+  ): Promise<Track[]> => {
     try {
       setIsLoading(true)
       let tracks: SpotifyTrack[] = []
 
-      console.log(`[${mode} mode] Starting track fetch...`)
+      console.log(`[${mode} mode] Starting track fetch...`, { artistId, albumId })
 
       if (mode === 'artist') {
         // Fetch fewer artists initially to avoid rate limiting
@@ -163,16 +201,41 @@ export function useSpotify() {
         tracks = trackArrays.flat()
         console.log(`[${mode} mode] Fetched ${tracks.length} total tracks from artists`)
       } else if (mode === 'album' || mode === 'genre') {
-        // Fetch 2 pages of top tracks for more variety
-        console.log(`[${mode} mode] Fetching top tracks (2 pages)...`)
-        const [page1, page2] = await Promise.all([
-          fetchTopTracks(50),
-          fetchWithToken(`${SPOTIFY_API_BASE}/me/top/tracks?limit=50&offset=50&time_range=medium_term`)
-            .then(data => data.items)
-            .catch(() => [] as SpotifyTrack[]) // Fallback if second page fails
-        ])
-        tracks = [...page1, ...page2]
-        console.log(`[${mode} mode] Fetched ${tracks.length} top tracks`)
+        // Track Mode: Handle artist/album filtering
+        if (mode === 'genre' && albumId) {
+          // Specific album selected: fetch tracks from that album
+          console.log(`[${mode} mode] Fetching tracks from specific album: ${albumId}`)
+          tracks = await fetchAlbumTracks(albumId)
+          console.log(`[${mode} mode] Fetched ${tracks.length} tracks from album`)
+        } else if (mode === 'genre' && artistId) {
+          // Artist selected (all albums): fetch tracks from all artist albums
+          console.log(`[${mode} mode] Fetching albums from artist: ${artistId}`)
+          const albums = await fetchArtistAlbums(artistId)
+          console.log(`[${mode} mode] Found ${albums.length} albums, fetching tracks...`)
+
+          // Fetch tracks from all albums (limit to first 10 albums to avoid rate limits)
+          const limitedAlbums = albums.slice(0, 10)
+          const trackArrays = await batchFetch(
+            limitedAlbums,
+            (album) => fetchAlbumTracks(album.id),
+            2, // 2 albums per batch
+            500 // 500ms delay between batches
+          )
+
+          tracks = trackArrays.flat()
+          console.log(`[${mode} mode] Fetched ${tracks.length} total tracks from artist albums`)
+        } else {
+          // Album Mode or Track Mode without selection: fetch user's top tracks
+          console.log(`[${mode} mode] Fetching top tracks (2 pages)...`)
+          const [page1, page2] = await Promise.all([
+            fetchTopTracks(50),
+            fetchWithToken(`${SPOTIFY_API_BASE}/me/top/tracks?limit=50&offset=50&time_range=medium_term`)
+              .then(data => data.items)
+              .catch(() => [] as SpotifyTrack[]) // Fallback if second page fails
+          ])
+          tracks = [...page1, ...page2]
+          console.log(`[${mode} mode] Fetched ${tracks.length} top tracks`)
+        }
       }
 
       // Debug: Log first track to see data structure
@@ -237,6 +300,8 @@ export function useSpotify() {
     fetchCurrentUser,
     fetchTopArtists,
     fetchTopTracks,
+    fetchArtistAlbums,
+    fetchAlbumTracks,
     getTracksForMode,
     checkPremiumStatus,
   }

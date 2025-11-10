@@ -1,15 +1,18 @@
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Trophy, Target, Zap, Home, RefreshCw, Share2 } from 'lucide-react'
+import { Trophy, Target, Zap, Home, RefreshCw, Share2, TrendingUp } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Container from '../ui/Container'
+import { updateStatsWithGameResult, loadStats } from '@/lib/stats'
 import type { GameResult } from '@/types'
 
 export default function ResultScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const result = location.state?.result as GameResult
+  const [overallStats, setOverallStats] = useState({ totalGames: 0, bestScore: 0, averageAccuracy: 0 })
 
   if (!result) {
     navigate('/')
@@ -18,6 +21,21 @@ export default function ResultScreen() {
 
   const correctAnswers = result.rounds.filter((r) => r.isCorrect).length
   const totalRounds = result.rounds.length
+
+  // Update stats when result screen loads
+  useEffect(() => {
+    // Assume average game is ~5 minutes (we'll track properly later)
+    const estimatedDuration = totalRounds * 30 // 30 seconds per round
+    updateStatsWithGameResult(result, estimatedDuration)
+
+    // Load updated stats
+    const stats = loadStats()
+    setOverallStats({
+      totalGames: stats.totalGames,
+      bestScore: stats.bestScore,
+      averageAccuracy: Math.round(stats.averageAccuracy),
+    })
+  }, [result, totalRounds])
 
   const handleShare = () => {
     const text = `I scored ${result.totalScore} points on LZRS Player!\n${correctAnswers}/${totalRounds} correct with ${result.accuracy.toFixed(1)}% accuracy and a ${result.maxStreak} streak! 🎵`
@@ -168,12 +186,41 @@ export default function ResultScreen() {
             </Card>
           </motion.div>
 
+          {/* Overall Stats */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9 }}
+            className="mb-xl"
+          >
+            <Card variant="glass">
+              <div className="flex items-center gap-sm mb-md">
+                <TrendingUp className="w-5 h-5 text-primary" />
+                <h3 className="text-lg font-semibold">Your Overall Stats</h3>
+              </div>
+              <div className="grid grid-cols-3 gap-md text-center">
+                <div>
+                  <p className="text-2xl font-bold text-primary">{overallStats.totalGames}</p>
+                  <p className="text-xs text-white/70">Games Played</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-yellow-400">{overallStats.bestScore}</p>
+                  <p className="text-xs text-white/70">Best Score</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-blue-400">{overallStats.averageAccuracy}%</p>
+                  <p className="text-xs text-white/70">Avg Accuracy</p>
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+
           {/* Action Buttons */}
           <motion.div
             className="grid grid-cols-1 md:grid-cols-3 gap-md"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.9 }}
+            transition={{ delay: 1.0 }}
           >
             <Button variant="ghost" onClick={() => navigate('/')}>
               <Home className="w-5 h-5 mr-sm" />

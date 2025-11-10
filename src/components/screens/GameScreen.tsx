@@ -1,17 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Clock, Trophy, Zap, X } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Clock, Trophy, Zap, X, Mic, Grid3x3 } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Container from '../ui/Container'
 import ProgressBar from '../ui/ProgressBar'
 import SoundWave from '../SoundWave'
 import DynamicIslandVisualizer from '../DynamicIslandVisualizer'
+import VoiceInput from '../VoiceInput'
+import BrowseSelection, { type BrowseOption } from '../BrowseSelection'
 import { useSpotify } from '@/hooks/useSpotify'
 import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer'
 import { useGameLogic } from '@/hooks/useGameLogic'
-import type { GameMode, Track } from '@/types'
+import { useSpotifyData } from '@/hooks/useSpotifyData'
+import type { GameMode, Track, SpotifyArtist, SpotifyAlbum } from '@/types'
 
 export default function GameScreen() {
   const location = useLocation()
@@ -20,13 +23,28 @@ export default function GameScreen() {
   const { playTrack, pause, isReady, error: playerError } = useSpotifyPlayer()
 
   const mode = (location.state?.mode as GameMode) || 'artist'
+  const selectedArtist = location.state?.artist as SpotifyArtist | undefined
+  const selectedAlbum = location.state?.album as SpotifyAlbum | undefined
+
   const [tracks, setTracks] = useState<Track[]>([])
   const [isLoadingTracks, setIsLoadingTracks] = useState(true)
   const [loadingMessage, setLoadingMessage] = useState('Preparing your quiz...')
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [showFeedback, setShowFeedback] = useState(false)
+  const [inputMethod, setInputMethod] = useState<'voice' | 'browse'>('voice')
+
+  // Hierarchical navigation state (for track mode with artist-only selection)
+  const [browseAlbum, setBrowseAlbum] = useState<BrowseOption | null>(null)
+  const showingAlbums = mode === 'genre' && selectedArtist && !selectedAlbum && !browseAlbum
 
   const fetchingRef = useRef(false)
+
+  // Determine useSpotifyData options based on selection and navigation state
+  const dataOptions = {
+    artistId: selectedArtist?.id,
+    albumId: browseAlbum?.id || selectedAlbum?.id,
+    fetchAlbums: showingAlbums,
+  }
+  const { options: browseOptions } = useSpotifyData(mode, dataOptions)
 
   const {
     currentQuestion,
@@ -56,7 +74,7 @@ export default function GameScreen() {
     const modeLabel = mode === 'artist' ? 'artists' : mode === 'album' ? 'albums' : 'tracks'
     setLoadingMessage(`Fetching your top ${modeLabel}...`)
 
-    getTracksForMode(mode)
+    getTracksForMode(mode, selectedArtist?.id, selectedAlbum?.id)
       .then((fetchedTracks) => {
         setLoadingMessage('Finding tracks with audio previews...')
 
@@ -156,15 +174,21 @@ export default function GameScreen() {
   const handleAnswerClick = (answer: string) => {
     if (!isPlaying || showFeedback) return
 
-    setSelectedAnswer(answer)
     setShowFeedback(true)
     handleAnswer(answer)
 
     // Reset for next round
     setTimeout(() => {
-      setSelectedAnswer(null)
       setShowFeedback(false)
     }, 1500)
+  }
+
+  const handleAlbumSelect = (album: BrowseOption) => {
+    setBrowseAlbum(album)
+  }
+
+  const handleBackToAlbums = () => {
+    setBrowseAlbum(null)
   }
 
   const handleQuit = () => {
@@ -203,7 +227,6 @@ export default function GameScreen() {
   }
 
   const progressPercent = (currentRound / totalRounds) * 100
-  const timePercent = (timeRemaining / 30) * 100
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-lg">
@@ -330,43 +353,58 @@ export default function GameScreen() {
             </div>
           </Card>
 
-          {/* Answer Options */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-            <AnimatePresence>
-              {currentQuestion.options.map((option, index) => {
-                const isSelected = selectedAnswer === option
-                const isCorrect = option === currentQuestion.correctAnswer
-                const showCorrect = showFeedback && isCorrect
-                const showWrong = showFeedback && isSelected && !isCorrect
-
-                return (
-                  <motion.div
-                    key={`${currentQuestion.round}-${option}`}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <Button
-                      variant="ghost"
-                      className={`w-full h-auto min-h-[60px] text-left justify-start px-lg py-md ${
-                        showCorrect
-                          ? 'bg-green-500/20 ring-2 ring-green-500'
-                          : showWrong
-                          ? 'bg-red-500/20 ring-2 ring-red-500'
-                          : isSelected
-                          ? 'bg-primary/20 ring-2 ring-primary'
-                          : ''
-                      }`}
-                      onClick={() => handleAnswerClick(option)}
-                      disabled={!isPlaying || showFeedback}
-                    >
-                      <span className="text-base font-normal break-words">{option}</span>
-                    </Button>
-                  </motion.div>
-                )
-              })}
-            </AnimatePresence>
+          {/* Input Method Toggle */}
+          <div className="flex justify-center gap-sm mb-lg">
+            <Button
+              variant={inputMethod === 'voice' ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setInputMethod('voice')}
+              disabled={!isPlaying || showFeedback}
+              className="flex items-center gap-sm"
+            >
+              <Mic className="w-4 h-4" />
+              Voice
+            </Button>
+            <Button
+              variant={inputMethod === 'browse' ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setInputMethod('browse')}
+              disabled={!isPlaying || showFeedback}
+              className="flex items-center gap-sm"
+            >
+              <Grid3x3 className="w-4 h-4" />
+              Browse
+            </Button>
           </div>
+
+          {/* Input Area */}
+          {inputMethod === 'voice' ? (
+            <VoiceInput
+              key={currentRound}
+              possibleAnswers={currentQuestion.options}
+              onAnswer={handleAnswerClick}
+              onSwitchToBrowse={() => setInputMethod('browse')}
+              disabled={!isPlaying || showFeedback}
+            />
+          ) : (
+            <BrowseSelection
+              key={currentRound}
+              options={browseOptions}
+              mode={mode}
+              onSelect={handleAnswerClick}
+              disabled={!isPlaying || showFeedback}
+              hierarchical={
+                selectedArtist && !selectedAlbum
+                  ? {
+                      showingAlbums: showingAlbums || false,
+                      selectedAlbum: browseAlbum || undefined,
+                      onAlbumSelect: handleAlbumSelect,
+                      onBack: handleBackToAlbums,
+                    }
+                  : undefined
+              }
+            />
+          )}
         </motion.div>
       </Container>
     </div>
