@@ -221,7 +221,7 @@ async function fetchAlbumTracksData(token: string, albumId: string): Promise<Bro
   return data.tracks.items.map((track: any) => ({
     id: track.id,
     name: track.name,
-    imageUrl: data.images[0]?.url || undefined,
+    // Don't include imageUrl - all tracks have the same album cover (redundant)
     subtitle: track.artists[0]?.name,
   }))
 }

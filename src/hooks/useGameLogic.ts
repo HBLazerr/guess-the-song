@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Track, QuizQuestion, RoundResult, GameResult, GameMode } from '@/types'
 import { shuffleArray, calculateScore } from '@/lib/utils'
 
@@ -19,7 +19,7 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
     return rounds
   }
 
-  const totalRounds = calculateRounds(tracks.length)
+  const totalRounds = useMemo(() => calculateRounds(tracks.length), [tracks.length])
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [currentRound, setCurrentRound] = useState(0)
@@ -41,34 +41,41 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
     const selectedTracks = shuffledTracks.slice(0, Math.min(rounds, shuffledTracks.length))
 
     return selectedTracks.map((track, index) => {
-      // Get wrong answers
-      const wrongAnswers = shuffledTracks
-        .filter(t => t.id !== track.id)
-        .slice(0, 3)
-
-      let options: string[]
       let correctAnswer: string
+      let getOptionValue: (t: Track) => string
 
+      // Determine correct answer and option extractor based on mode
       if (mode === 'artist') {
         correctAnswer = track.artists[0]
-        options = [
-          correctAnswer,
-          ...wrongAnswers.map(t => t.artists[0]),
-        ]
+        getOptionValue = (t) => t.artists[0]
       } else if (mode === 'album') {
         correctAnswer = track.album
-        options = [
-          correctAnswer,
-          ...wrongAnswers.map(t => t.album),
-        ]
+        getOptionValue = (t) => t.album
       } else {
         // genre mode - use track name
         correctAnswer = track.name
-        options = [
-          correctAnswer,
-          ...wrongAnswers.map(t => t.name),
-        ]
+        getOptionValue = (t) => t.name
       }
+
+      // Collect unique wrong answers (avoid duplicates)
+      const uniqueOptions = new Set<string>([correctAnswer])
+      const wrongAnswers: string[] = []
+
+      for (const t of shuffledTracks) {
+        if (t.id === track.id) continue // Skip the correct track
+
+        const optionValue = getOptionValue(t)
+        if (!uniqueOptions.has(optionValue)) {
+          uniqueOptions.add(optionValue)
+          wrongAnswers.push(optionValue)
+
+          // Stop when we have 3 unique wrong answers
+          if (wrongAnswers.length >= 3) break
+        }
+      }
+
+      // Build final options array
+      const options = [correctAnswer, ...wrongAnswers]
 
       return {
         track,
@@ -85,7 +92,7 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
       const newQuestions = generateQuestions()
       setQuestions(newQuestions)
     }
-  }, [tracks, generateQuestions])
+  }, [tracks, mode, generateQuestions])
 
   // Timer logic
   useEffect(() => {
@@ -103,10 +110,10 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
     return () => clearInterval(timer)
   }, [isPlaying, isPaused, timeRemaining])
 
-  const startRound = () => {
+  const startRound = useCallback(() => {
     setIsPlaying(true)
     setTimeRemaining(ROUND_TIME)
-  }
+  }, [])
 
   const handleAnswer = useCallback((answer: string) => {
     if (!isPlaying || currentRound >= questions.length) return
@@ -151,7 +158,7 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
         startRound()
       }, 1500) // Brief pause before next round
     }
-  }, [currentRound, questions, isPlaying, timeRemaining, streak, maxStreak, roundResults])
+  }, [currentRound, questions, isPlaying, timeRemaining, streak, maxStreak, roundResults, startRound])
 
   const finishGame = (results: RoundResult[]) => {
     const correctAnswers = results.filter(r => r.isCorrect).length
@@ -168,19 +175,19 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
     setGameResult(result)
   }
 
-  const pauseGame = () => {
+  const pauseGame = useCallback(() => {
     if (isPlaying && !isPaused) {
       setIsPaused(true)
     }
-  }
+  }, [isPlaying, isPaused])
 
-  const resumeGame = () => {
+  const resumeGame = useCallback(() => {
     if (isPlaying && isPaused) {
       setIsPaused(false)
     }
-  }
+  }, [isPlaying, isPaused])
 
-  const resetGame = () => {
+  const resetGame = useCallback(() => {
     setCurrentRound(0)
     setTimeRemaining(ROUND_TIME)
     setScore(0)
@@ -192,7 +199,7 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
     setGameResult(null)
     const newQuestions = generateQuestions()
     setQuestions(newQuestions)
-  }
+  }, [generateQuestions])
 
   return {
     currentQuestion: questions[currentRound],

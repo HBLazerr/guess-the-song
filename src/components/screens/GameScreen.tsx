@@ -30,13 +30,18 @@ export default function GameScreen() {
   const [isLoadingTracks, setIsLoadingTracks] = useState(true)
   const [loadingMessage, setLoadingMessage] = useState('Preparing your quiz...')
   const [showFeedback, setShowFeedback] = useState(false)
-  const [inputMethod, setInputMethod] = useState<'voice' | 'browse'>('voice')
+  const [inputMethod, setInputMethod] = useState<'voice' | 'browse'>('browse')
+  const [answerFeedback, setAnswerFeedback] = useState<{
+    selectedAnswer: string
+    isCorrect: boolean
+  } | null>(null)
 
   // Hierarchical navigation state (for track mode with artist-only selection)
   const [browseAlbum, setBrowseAlbum] = useState<BrowseOption | null>(null)
   const showingAlbums = mode === 'genre' && selectedArtist && !selectedAlbum && !browseAlbum
 
   const fetchingRef = useRef(false)
+  const hasStartedRef = useRef(false)
 
   // Determine useSpotifyData options based on selection and navigation state
   const dataOptions = {
@@ -133,19 +138,20 @@ export default function GameScreen() {
 
   // Start first round when tracks are loaded
   useEffect(() => {
-    if (!isLoadingTracks && tracks.length > 0 && currentRound === 1 && !isPlaying) {
+    if (!isLoadingTracks && tracks.length > 0 && currentRound === 1 && !isPlaying && !hasStartedRef.current) {
+      hasStartedRef.current = true
       setTimeout(() => startRound(), 1000)
+    }
+
+    // Reset when game resets
+    if (currentRound > 1) {
+      hasStartedRef.current = false
     }
   }, [isLoadingTracks, tracks, currentRound, isPlaying, startRound])
 
   // Handle audio playback with Web Playback SDK
   useEffect(() => {
-    if (currentQuestion && isPlaying && !isPaused) {
-      if (!isReady) {
-        console.log('[Playback] Player not ready yet, waiting...')
-        return
-      }
-
+    if (currentQuestion && isPlaying && !isPaused && isReady) {
       // Use the calculated best start time (in seconds) and convert to milliseconds
       const startTime = currentQuestion.track.startTime || 30
       const startTimeMs = startTime * 1000
@@ -154,13 +160,16 @@ export default function GameScreen() {
 
       // Play track using Web Playback SDK
       playTrack(currentQuestion.track.id, startTimeMs)
-    } else if (isPaused || !isPlaying) {
-      // Pause when paused or not playing
+    } else if ((isPaused || !isPlaying) && isReady) {
+      // Only pause when player is ready AND we're in pause state
       pause()
     }
 
+    // Cleanup: pause when unmounting ONLY if player is ready
     return () => {
-      pause()
+      if (isReady) {
+        pause()
+      }
     }
   }, [currentQuestion, isPlaying, isPaused, isReady, playTrack, pause])
 
@@ -172,7 +181,16 @@ export default function GameScreen() {
   }, [gameResult, navigate])
 
   const handleAnswerClick = (answer: string) => {
-    if (!isPlaying || showFeedback) return
+    if (!isPlaying || showFeedback || !currentQuestion) return
+
+    // Determine if the answer is correct
+    const isCorrect = answer === currentQuestion.correctAnswer
+
+    // Set feedback state for visual feedback
+    setAnswerFeedback({
+      selectedAnswer: answer,
+      isCorrect,
+    })
 
     setShowFeedback(true)
     handleAnswer(answer)
@@ -180,6 +198,7 @@ export default function GameScreen() {
     // Reset for next round
     setTimeout(() => {
       setShowFeedback(false)
+      setAnswerFeedback(null)
     }, 1500)
   }
 
@@ -356,16 +375,6 @@ export default function GameScreen() {
           {/* Input Method Toggle */}
           <div className="flex justify-center gap-sm mb-lg">
             <Button
-              variant={inputMethod === 'voice' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setInputMethod('voice')}
-              disabled={!isPlaying || showFeedback}
-              className="flex items-center gap-sm"
-            >
-              <Mic className="w-4 h-4" />
-              Voice
-            </Button>
-            <Button
               variant={inputMethod === 'browse' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => setInputMethod('browse')}
@@ -374,6 +383,16 @@ export default function GameScreen() {
             >
               <Grid3x3 className="w-4 h-4" />
               Browse
+            </Button>
+            <Button
+              variant={inputMethod === 'voice' ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => setInputMethod('voice')}
+              disabled={!isPlaying || showFeedback}
+              className="flex items-center gap-sm"
+            >
+              <Mic className="w-4 h-4" />
+              Voice (beta)
             </Button>
           </div>
 
@@ -385,6 +404,7 @@ export default function GameScreen() {
               onAnswer={handleAnswerClick}
               onSwitchToBrowse={() => setInputMethod('browse')}
               disabled={!isPlaying || showFeedback}
+              answerFeedback={answerFeedback}
             />
           ) : (
             <BrowseSelection
@@ -393,6 +413,7 @@ export default function GameScreen() {
               mode={mode}
               onSelect={handleAnswerClick}
               disabled={!isPlaying || showFeedback}
+              answerFeedback={answerFeedback}
               hierarchical={
                 selectedArtist && !selectedAlbum
                   ? {

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, MicOff, AlertCircle, Check } from 'lucide-react'
+import { Mic, MicOff, AlertCircle, Check, X } from 'lucide-react'
 import { VoiceRecognizer, isVoiceRecognitionSupported, type VoiceRecognitionError } from '@/lib/voiceRecognition'
 import { findBestMatch } from '@/lib/fuzzyMatch'
 import Button from './ui/Button'
@@ -12,6 +12,10 @@ interface VoiceInputProps {
   onSwitchToBrowse: () => void
   disabled?: boolean
   className?: string
+  answerFeedback?: {
+    selectedAnswer: string
+    isCorrect: boolean
+  } | null
 }
 
 type VoiceState = 'idle' | 'listening' | 'processing' | 'success' | 'error'
@@ -22,6 +26,7 @@ export default function VoiceInput({
   onSwitchToBrowse,
   disabled = false,
   className,
+  answerFeedback,
 }: VoiceInputProps) {
   const [state, setState] = useState<VoiceState>('idle')
   const [transcript, setTranscript] = useState<string>('')
@@ -130,11 +135,13 @@ export default function VoiceInput({
           className={cn(
             'relative w-32 h-32 rounded-full flex items-center justify-center transition-all',
             'focus:outline-none focus:ring-4 focus:ring-primary/50',
-            state === 'listening' && 'bg-red-500',
-            state === 'processing' && 'bg-yellow-500',
-            state === 'success' && 'bg-green-500',
-            state === 'error' && 'bg-red-600',
-            state === 'idle' && 'bg-primary hover:bg-primary/90',
+            answerFeedback?.isCorrect && 'bg-green-500',
+            answerFeedback && !answerFeedback.isCorrect && 'bg-red-500',
+            !answerFeedback && state === 'listening' && 'bg-red-500',
+            !answerFeedback && state === 'processing' && 'bg-yellow-500',
+            !answerFeedback && state === 'success' && 'bg-green-500',
+            !answerFeedback && state === 'error' && 'bg-red-600',
+            !answerFeedback && state === 'idle' && 'bg-primary hover:bg-primary/90',
             (disabled || state === 'listening' || state === 'processing') && 'cursor-not-allowed opacity-50'
           )}
           animate={{
@@ -163,8 +170,10 @@ export default function VoiceInput({
           )}
 
           {/* Icon */}
-          {state === 'listening' && <Mic className="w-12 h-12 text-white" />}
-          {state === 'processing' && (
+          {answerFeedback?.isCorrect && <Check className="w-12 h-12 text-white" />}
+          {answerFeedback && !answerFeedback.isCorrect && <X className="w-12 h-12 text-white" />}
+          {!answerFeedback && state === 'listening' && <Mic className="w-12 h-12 text-white" />}
+          {!answerFeedback && state === 'processing' && (
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
@@ -172,9 +181,9 @@ export default function VoiceInput({
               <Mic className="w-12 h-12 text-white" />
             </motion.div>
           )}
-          {state === 'success' && <Check className="w-12 h-12 text-white" />}
-          {state === 'error' && <MicOff className="w-12 h-12 text-white" />}
-          {state === 'idle' && <Mic className="w-12 h-12 text-white" />}
+          {!answerFeedback && state === 'success' && <Check className="w-12 h-12 text-white" />}
+          {!answerFeedback && state === 'error' && <MicOff className="w-12 h-12 text-white" />}
+          {!answerFeedback && state === 'idle' && <Mic className="w-12 h-12 text-white" />}
         </motion.button>
       </motion.div>
 
@@ -241,7 +250,24 @@ export default function VoiceInput({
             </motion.div>
           )}
 
-          {state === 'idle' && matchedAnswer && transcript && (
+          {answerFeedback && (
+            <motion.div
+              key="feedback"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <p className={cn(
+                "text-lg font-semibold mb-sm",
+                answerFeedback.isCorrect ? "text-green-400" : "text-red-400"
+              )}>
+                {answerFeedback.isCorrect ? "Correct!" : "Incorrect"}
+              </p>
+              <p className="text-base text-white">"{answerFeedback.selectedAnswer}"</p>
+            </motion.div>
+          )}
+
+          {state === 'idle' && matchedAnswer && transcript && !answerFeedback && (
             <motion.div
               key="confirm"
               initial={{ opacity: 0, y: 10 }}

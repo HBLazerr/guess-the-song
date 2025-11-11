@@ -30,6 +30,9 @@ export default function HomeScreen() {
     fetchAlbums: true,
   })
 
+  // Fetch top albums for "Most Listened To" section
+  const { options: topAlbums } = useSpotifyData('album')
+
   // Check Premium status on mount
   useEffect(() => {
     if (user?.isPremium !== undefined) {
@@ -54,16 +57,17 @@ export default function HomeScreen() {
       icon: User,
     },
     {
-      id: 'album' as GameMode,
-      title: 'Album Mode',
-      description: 'Identify albums from your library',
-      icon: Disc,
-    },
-    {
       id: 'genre' as GameMode,
       title: 'Track Mode',
       description: 'Name that tune from your favorites',
       icon: Radio,
+      recommended: true,
+    },
+    {
+      id: 'album' as GameMode,
+      title: 'Album Mode',
+      description: 'Identify albums from your library',
+      icon: Disc,
     },
   ]
 
@@ -272,6 +276,52 @@ export default function HomeScreen() {
                 </p>
               </div>
 
+              {/* Most Listened To Section */}
+              {topAlbums && topAlbums.length > 0 && (
+                <div className="mb-xl">
+                  <h2 className="text-lg font-semibold mb-md">Your Most Listened To</h2>
+                  <div className="flex gap-md overflow-x-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent pb-md -mx-lg px-lg">
+                    {topAlbums.slice(0, 10).map((album, index) => (
+                      <motion.button
+                        key={album.id}
+                        onClick={() => {
+                          navigate('/game', {
+                            state: {
+                              mode: 'album',
+                              album: { id: album.id, name: album.name }
+                            }
+                          })
+                        }}
+                        className="flex-shrink-0 w-32 cursor-pointer group"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: index * 0.05 }}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <div className="aspect-square rounded-md overflow-hidden mb-xs shadow-lg">
+                          {album.imageUrl ? (
+                            <img
+                              src={album.imageUrl}
+                              alt={album.name}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-white/10 flex items-center justify-center">
+                              <Music className="w-12 h-12 text-white/30" />
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-xs text-white/90 font-medium line-clamp-2 mb-1">{album.name}</p>
+                        {album.subtitle && (
+                          <p className="text-xs text-white/50 line-clamp-1">{album.subtitle}</p>
+                        )}
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Mode Selection */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-lg mb-xl">
                 {modes.map((mode, index) => {
@@ -295,6 +345,13 @@ export default function HomeScreen() {
                         onClick={() => setSelectedMode(mode.id)}
                       >
                         <div className="text-center">
+                          {mode.recommended && (
+                            <div className="mb-sm">
+                              <span className="inline-flex items-center gap-xs bg-primary/20 px-sm py-xs rounded-full text-xs font-semibold text-primary">
+                                ⭐ Recommended
+                              </span>
+                            </div>
+                          )}
                           <div
                             className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-md ${
                               isSelected ? 'bg-primary text-background' : 'bg-white/10 text-primary'

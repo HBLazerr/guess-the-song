@@ -253,10 +253,50 @@ export function useSpotify() {
         album_art: track.album.images[0]?.url || '',
       }))
 
+      // Deduplicate tracks by name + primary artist (handles singles, remixes, deluxe versions)
+      const trackMap = new Map<string, typeof validTracks[0]>()
+
+      // Helper function to normalize track names (remove variations)
+      const normalizeTrackName = (name: string): string => {
+        return name
+          .toLowerCase()
+          .replace(/\s*[\(\[].*?(deluxe|remix|remaster|edit|version|extended|radio|acoustic|live|instrumental|explicit).*?[\)\]]/gi, '')
+          .replace(/\s*-\s*(deluxe|remix|remaster|edit|version|extended|radio|acoustic|live|instrumental|explicit).*$/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+      }
+
+      validTracks.forEach(track => {
+        const normalizedName = normalizeTrackName(track.name)
+        const key = `${normalizedName}-${track.artists[0].toLowerCase()}`
+
+        const existingTrack = trackMap.get(key)
+
+        if (!existingTrack) {
+          // No track with this normalized name exists, add it
+          trackMap.set(key, track)
+        } else {
+          // Track exists - prefer the version WITHOUT deluxe/remix/etc in the title
+          const existingHasVariation = existingTrack.name.toLowerCase() !== normalizedName
+          const currentHasVariation = track.name.toLowerCase() !== normalizedName
+
+          if (existingHasVariation && !currentHasVariation) {
+            // Replace with the cleaner version
+            trackMap.set(key, track)
+          }
+          // Otherwise keep the existing one (first occurrence or cleaner version)
+        }
+      })
+      const deduplicatedTracks = Array.from(trackMap.values())
+
+      if (validTracks.length !== deduplicatedTracks.length) {
+        console.log(`[${mode} mode] Deduplicated: ${validTracks.length} → ${deduplicatedTracks.length} tracks (removed ${validTracks.length - deduplicatedTracks.length} duplicates)`)
+      }
+
       // Fetch audio analysis for tracks to find best playback segments
-      console.log(`[${mode} mode] Fetching audio analysis for ${Math.min(validTracks.length, 5)} sample tracks...`)
+      console.log(`[${mode} mode] Fetching audio analysis for ${Math.min(deduplicatedTracks.length, 5)} sample tracks...`)
       const tracksWithAnalysis = await Promise.all(
-        validTracks.slice(0, Math.min(validTracks.length, 10)).map(async (track) => {
+        deduplicatedTracks.slice(0, Math.min(deduplicatedTracks.length, 10)).map(async (track) => {
           const analysis = await fetchAudioAnalysis(track.id)
           if (analysis) {
             const { findBestSegment } = await import('@/lib/utils')
@@ -268,7 +308,7 @@ export function useSpotify() {
       )
 
       // For remaining tracks without analysis, use default start time
-      const remainingTracks = validTracks.slice(tracksWithAnalysis.length).map(track => ({
+      const remainingTracks = deduplicatedTracks.slice(tracksWithAnalysis.length).map(track => ({
         ...track,
         startTime: 30 // Default fallback
       }))

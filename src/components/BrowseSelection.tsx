@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Search, Music, ArrowLeft } from 'lucide-react'
+import { Search, Music, ArrowLeft, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { GameMode } from '@/types'
 
@@ -24,6 +24,11 @@ interface BrowseSelectionProps {
     onAlbumSelect?: (album: BrowseOption) => void
     onBack?: () => void
   }
+  // Answer feedback props
+  answerFeedback?: {
+    selectedAnswer: string
+    isCorrect: boolean
+  } | null
 }
 
 export default function BrowseSelection({
@@ -33,9 +38,9 @@ export default function BrowseSelection({
   disabled = false,
   className,
   hierarchical,
+  answerFeedback,
 }: BrowseSelectionProps) {
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // Filter options based on search query
   const filteredOptions = useMemo(() => {
@@ -58,12 +63,8 @@ export default function BrowseSelection({
       return
     }
 
-    // Otherwise, select the option as the answer
-    setSelectedId(option.id)
-    // Brief delay for visual feedback
-    setTimeout(() => {
-      onSelect(option.name)
-    }, 300)
+    // Otherwise, submit the answer (feedback will come from parent via props)
+    onSelect(option.name)
   }
 
   const getModeLabel = () => {
@@ -142,28 +143,34 @@ export default function BrowseSelection({
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-md pb-md">
-            {filteredOptions.map((option, index) => (
-              <motion.button
-                key={option.id}
-                onClick={() => handleSelect(option)}
-                disabled={disabled}
-                className={cn(
-                  'group relative flex flex-col items-center p-md rounded-lg',
-                  'bg-white/5 border border-white/10',
-                  'hover:bg-white/10 hover:border-primary/50',
-                  'focus:outline-none focus:ring-2 focus:ring-primary',
-                  'transition-all duration-200',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                  selectedId === option.id && 'ring-2 ring-green-500 bg-green-500/20'
-                )}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.02, duration: 0.2 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {/* Image */}
-                <div className="relative w-full aspect-square mb-sm rounded-md overflow-hidden bg-white/5">
-                  {option.imageUrl ? (
+            {filteredOptions.map((option, index) => {
+              const isSelected = answerFeedback?.selectedAnswer === option.name
+              const isCorrect = isSelected && answerFeedback?.isCorrect
+              const isIncorrect = isSelected && !answerFeedback?.isCorrect
+
+              return (
+                <motion.button
+                  key={option.id}
+                  onClick={() => handleSelect(option)}
+                  disabled={disabled}
+                  className={cn(
+                    'group relative flex flex-col items-center p-md rounded-lg',
+                    'bg-white/5 border border-white/10',
+                    'hover:bg-white/10 hover:border-primary/50',
+                    'focus:outline-none focus:ring-2 focus:ring-primary',
+                    'transition-all duration-200',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                    isCorrect && 'ring-2 ring-green-500 bg-green-500/20',
+                    isIncorrect && 'ring-2 ring-red-500 bg-red-500/20'
+                  )}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.02, duration: 0.2 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                {/* Image - only show if imageUrl exists */}
+                {option.imageUrl && (
+                  <div className="relative w-full aspect-square mb-sm rounded-md overflow-hidden bg-white/5">
                     <img
                       src={option.imageUrl}
                       alt={option.name}
@@ -177,35 +184,42 @@ export default function BrowseSelection({
                         e.currentTarget.style.display = 'none'
                       }}
                     />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Music className="w-12 h-12 text-white/20" />
-                    </div>
-                  )}
 
-                  {/* Selection indicator */}
-                  {selectedId === option.id && (
-                    <motion.div
-                      className="absolute inset-0 bg-green-500/30 flex items-center justify-center"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    >
-                      <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
-                        <svg
-                          className="w-8 h-8 text-white"
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    </motion.div>
-                  )}
-                </div>
+                    {/* Feedback indicator */}
+                    {isCorrect && (
+                      <motion.div
+                        className="absolute inset-0 bg-green-500/30 flex items-center justify-center"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                      >
+                        <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
+                          <svg
+                            className="w-8 h-8 text-white"
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      </motion.div>
+                    )}
+                    {isIncorrect && (
+                      <motion.div
+                        className="absolute inset-0 bg-red-500/30 flex items-center justify-center"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                      >
+                        <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center">
+                          <X className="w-8 h-8 text-white" />
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+                )}
 
                 {/* Name */}
                 <p
@@ -224,7 +238,8 @@ export default function BrowseSelection({
                   </p>
                 )}
               </motion.button>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
