@@ -181,7 +181,7 @@ async function fetchTopTracks(token: string): Promise<BrowseOption[]> {
   return data.items.map((track: any) => ({
     id: track.id,
     name: track.name,
-    imageUrl: track.album.images[0]?.url || undefined,
+    // Don't include imageUrl for tracks - keeps the browse list clean and text-focused
     subtitle: track.artists[0]?.name,
   }))
 }

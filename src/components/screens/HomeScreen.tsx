@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Music, Radio, LogOut, Crown, ArrowLeft, Trophy, Target, Zap, Sparkles } from 'lucide-react'
+import { Music, Radio, LogOut, Crown, ArrowLeft, Trophy, Target, Zap, Sparkles, Clock } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Container from '../ui/Container'
@@ -10,7 +10,7 @@ import BrowseSelection, { type BrowseOption } from '../BrowseSelection'
 import { useSpotify } from '@/hooks/useSpotify'
 import { useSpotifyData } from '@/hooks/useSpotifyData'
 import { logout } from '@/lib/spotify'
-import { loadStats } from '@/lib/stats'
+import { loadStats, getBestArtist, getAverageReactionTime, getLastGameStats } from '@/lib/stats'
 import type { GameMode, SpotifyArtist, SpotifyAlbum } from '@/types'
 
 export default function HomeScreen() {
@@ -266,40 +266,114 @@ export default function HomeScreen() {
               {/* Stats Dashboard */}
               {(() => {
                 const stats = loadStats()
+                const bestArtist = getBestArtist()
+                const avgReactionTime = getAverageReactionTime()
+                const lastGame = getLastGameStats()
+
+                // Debug: Log last game data
+                if (lastGame) {
+                  console.log('[HomeScreen] Last game data:', lastGame)
+                }
 
                 if (stats.totalGames > 0) {
                   return (
-                    <div className="mb-xl">
-                      <h2 className="text-lg font-semibold mb-md flex items-center gap-sm">
-                        <Sparkles className="w-5 h-5 text-primary" />
-                        Your Stats
-                      </h2>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
-                        <StatsCard
-                          icon={Trophy}
-                          label="Total Games"
-                          value={stats.totalGames}
-                          iconColor="text-yellow-400"
-                          delay={0.1}
-                        />
-                        <StatsCard
-                          icon={Target}
-                          label="All-Time Best"
-                          value={`${stats.bestScore}%`}
-                          subtitle={`${Math.round(stats.averageAccuracy)}% average`}
-                          iconColor="text-primary"
-                          delay={0.15}
-                        />
-                        <StatsCard
-                          icon={Zap}
-                          label="Current Streak"
-                          value={`${stats.currentStreak} day${stats.currentStreak !== 1 ? 's' : ''}`}
-                          subtitle={`${stats.maxStreak} day max`}
-                          iconColor="text-purple-400"
-                          delay={0.2}
-                        />
+                    <>
+                      <div className="mb-lg">
+                        <h2 className="text-lg font-semibold mb-md flex items-center gap-sm">
+                          <Sparkles className="w-5 h-5 text-primary" />
+                          Your Stats
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
+                          <StatsCard
+                            icon={Trophy}
+                            label="Total Games"
+                            value={stats.totalGames}
+                            subtitle={`${Math.round(stats.averageAccuracy)}% accuracy`}
+                            iconColor="text-yellow-400"
+                            delay={0.1}
+                          />
+                          <StatsCard
+                            icon={Clock}
+                            label="Avg Speed"
+                            value={avgReactionTime > 0 ? `${avgReactionTime.toFixed(1)}s` : 'N/A'}
+                            subtitle={`${stats.maxStreak} max streak`}
+                            iconColor="text-blue-400"
+                            delay={0.15}
+                          />
+                          <StatsCard
+                            icon={Target}
+                            label="Best Artist"
+                            value={bestArtist?.name || 'N/A'}
+                            subtitle={bestArtist ? `${bestArtist.accuracy}% accuracy` : 'Play more to unlock'}
+                            iconColor="text-purple-400"
+                            delay={0.2}
+                          />
+                        </div>
                       </div>
-                    </div>
+
+                      {/* Last Game Summary */}
+                      {lastGame && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.25 }}
+                          className="mb-xl"
+                        >
+                          <Card variant="glass">
+                            <div className="flex items-start gap-md mb-md">
+                              {/* Album Art */}
+                              <div className="w-20 h-20 rounded-md shadow-lg flex-shrink-0 bg-white/5 flex items-center justify-center overflow-hidden">
+                                {lastGame.albumArt ? (
+                                  <img
+                                    src={lastGame.albumArt}
+                                    alt={lastGame.albumName || 'Album'}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <Music className="w-10 h-10 text-white/30" />
+                                )}
+                              </div>
+
+                              {/* Game Info */}
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-semibold text-white/70 uppercase tracking-wide mb-xs">
+                                  Last Game
+                                </h3>
+                                {lastGame.artistName && (
+                                  <p className="text-lg font-semibold text-primary truncate mb-xs">
+                                    {lastGame.artistName}
+                                  </p>
+                                )}
+                                {lastGame.albumName && (
+                                  <p className="text-sm text-white/60 truncate mb-md">
+                                    {lastGame.albumName}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-lg">
+                                  <div>
+                                    <p className="text-2xl font-bold">{lastGame.score} pts</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-sm text-white/70">Correct</p>
+                                    <p className="text-lg font-bold text-primary">
+                                      {lastGame.correctAnswers}/{lastGame.totalRounds}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              variant="primary"
+                              size="md"
+                              onClick={() => setSelectedMode('genre')}
+                              className="w-full"
+                            >
+                              Play Again
+                            </Button>
+                          </Card>
+                        </motion.div>
+                      )}
+                    </>
                   )
                 } else {
                   return (

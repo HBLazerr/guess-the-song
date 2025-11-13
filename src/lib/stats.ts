@@ -38,8 +38,25 @@ export interface GameHistoryEntry {
   score: number
   accuracy: number
   maxStreak: number
-  rounds: number
+  rounds: RoundResult[]
   duration: number // seconds
+}
+
+interface RoundResult {
+  round: number
+  track: {
+    id: string
+    name: string
+    artists: string[]
+    album: string
+    album_art: string
+  }
+  userAnswer: string
+  correctAnswer: string
+  isCorrect: boolean
+  timeRemaining: number
+  points: number
+  streak: number
 }
 
 /**
@@ -195,7 +212,7 @@ export function updateStatsWithGameResult(result: GameResult, durationSeconds: n
     stats.modeStats[curr].gamesPlayed > stats.modeStats[prev].gamesPlayed ? curr : prev
   )
 
-  // Add to game history
+  // Add to game history with detailed round results
   const historyEntry: GameHistoryEntry = {
     id: `${Date.now()}-${Math.random()}`,
     date: today,
@@ -203,7 +220,22 @@ export function updateStatsWithGameResult(result: GameResult, durationSeconds: n
     score: result.totalScore,
     accuracy: result.accuracy,
     maxStreak: result.maxStreak,
-    rounds: totalQuestions,
+    rounds: result.rounds.map(r => ({
+      round: r.round,
+      track: {
+        id: r.track.id,
+        name: r.track.name,
+        artists: r.track.artists,
+        album: r.track.album,
+        album_art: r.track.album_art,
+      },
+      userAnswer: r.userAnswer,
+      correctAnswer: r.correctAnswer,
+      isCorrect: r.isCorrect,
+      timeRemaining: r.timeRemaining,
+      points: r.points,
+      streak: r.streak,
+    })),
     duration: durationSeconds,
   }
   history.push(historyEntry)
@@ -219,6 +251,119 @@ export function updateStatsWithGameResult(result: GameResult, durationSeconds: n
 export function resetStats(): void {
   localStorage.removeItem(STATS_KEY)
   localStorage.removeItem(GAME_HISTORY_KEY)
+}
+
+/**
+ * Get best artist based on accuracy across all games
+ */
+export function getBestArtist(): { name: string; accuracy: number; totalAnswered: number } | null {
+  const history = loadGameHistory()
+
+  if (history.length === 0) return null
+
+  // Track artist performance: { artistName: { correct: number, total: number } }
+  const artistStats = new Map<string, { correct: number; total: number }>()
+
+  history.forEach(game => {
+    game.rounds?.forEach(round => {
+      // Extract artist from the track (assuming first artist)
+      const artist = round.track.artists[0]
+      if (!artist) return
+
+      const stats = artistStats.get(artist) || { correct: 0, total: 0 }
+      stats.total += 1
+      if (round.isCorrect) {
+        stats.correct += 1
+      }
+      artistStats.set(artist, stats)
+    })
+  })
+
+  if (artistStats.size === 0) return null
+
+  // Find artist with best accuracy (min 3 questions to qualify)
+  let bestArtist: { name: string; accuracy: number; totalAnswered: number } | null = null
+  let bestAccuracy = 0
+
+  artistStats.forEach((stats, artist) => {
+    if (stats.total >= 3) { // Minimum 3 questions
+      const accuracy = (stats.correct / stats.total) * 100
+      if (accuracy > bestAccuracy || (accuracy === bestAccuracy && stats.total > (bestArtist?.totalAnswered || 0))) {
+        bestAccuracy = accuracy
+        bestArtist = {
+          name: artist,
+          accuracy: Math.round(accuracy),
+          totalAnswered: stats.total,
+        }
+      }
+    }
+  })
+
+  return bestArtist
+}
+
+/**
+ * Get last game stats
+ */
+export function getLastGameStats(): {
+  score: number
+  correctAnswers: number
+  totalRounds: number
+  accuracy: number
+  artistName?: string
+  albumName?: string
+  albumArt?: string
+} | null {
+  const history = loadGameHistory()
+
+  if (history.length === 0) return null
+
+  const lastGame = history[history.length - 1]
+  const correctAnswers = lastGame.rounds.filter(r => r.isCorrect).length
+
+  // Get artist, album, and album art info from the first round
+  const firstRound = lastGame.rounds[0]
+  const artistName = firstRound?.track.artists[0]
+  const albumName = firstRound?.track.album
+  const albumArt = firstRound?.track.album_art
+
+  return {
+    score: lastGame.score,
+    correctAnswers,
+    totalRounds: lastGame.rounds.length,
+    accuracy: lastGame.accuracy,
+    artistName,
+    albumName,
+    albumArt,
+  }
+}
+
+/**
+ * Calculate average reaction time (time taken for correct answers)
+ */
+export function getAverageReactionTime(): number {
+  const history = loadGameHistory()
+
+  if (history.length === 0) return 0
+
+  let totalTime = 0
+  let correctCount = 0
+  const ROUND_TIME = 30 // seconds per round
+
+  history.forEach(game => {
+    game.rounds.forEach(round => {
+      if (round.isCorrect) {
+        // Calculate time taken = ROUND_TIME - timeRemaining
+        const timeTaken = ROUND_TIME - round.timeRemaining
+        totalTime += timeTaken
+        correctCount += 1
+      }
+    })
+  })
+
+  if (correctCount === 0) return 0
+
+  return totalTime / correctCount
 }
 
 /**

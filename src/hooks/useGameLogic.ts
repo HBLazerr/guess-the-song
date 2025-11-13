@@ -165,10 +165,16 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
     const correctAnswers = results.filter(r => r.isCorrect).length
     const accuracy = (correctAnswers / results.length) * 100
 
+    // Calculate total score from all rounds (don't rely on state which may not be updated yet)
+    const totalScore = results.reduce((sum, r) => sum + r.points, 0)
+
+    // Calculate max streak from all rounds
+    const calculatedMaxStreak = Math.max(...results.map(r => r.streak), 0)
+
     const result: GameResult = {
-      totalScore: score,
+      totalScore,
       accuracy,
-      maxStreak,
+      maxStreak: calculatedMaxStreak,
       rounds: results,
       mode,
     }

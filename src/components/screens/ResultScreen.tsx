@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Trophy, Target, Zap, Home, RefreshCw, Share2, TrendingUp } from 'lucide-react'
 import Button from '../ui/Button'
@@ -13,6 +13,7 @@ export default function ResultScreen() {
   const navigate = useNavigate()
   const result = location.state?.result as GameResult
   const [overallStats, setOverallStats] = useState({ totalGames: 0, bestScore: 0, averageAccuracy: 0 })
+  const statsUpdatedRef = useRef(false)
 
   if (!result) {
     navigate('/')
@@ -22,8 +23,17 @@ export default function ResultScreen() {
   const correctAnswers = result.rounds.filter((r) => r.isCorrect).length
   const totalRounds = result.rounds.length
 
-  // Update stats when result screen loads
+  // Update stats when result screen loads (only once)
   useEffect(() => {
+    // Prevent duplicate updates (React Strict Mode runs effects twice)
+    if (statsUpdatedRef.current) {
+      console.log('[ResultScreen] Stats already updated, skipping')
+      return
+    }
+
+    statsUpdatedRef.current = true
+    console.log('[ResultScreen] Updating stats with game result')
+
     // Assume average game is ~5 minutes (we'll track properly later)
     const estimatedDuration = totalRounds * 30 // 30 seconds per round
     updateStatsWithGameResult(result, estimatedDuration)
