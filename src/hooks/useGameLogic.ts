@@ -112,6 +112,7 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
 
   const startRound = useCallback(() => {
     setIsPlaying(true)
+    setIsPaused(false) // Always unpause when starting a new round
     setTimeRemaining(ROUND_TIME)
   }, [])
 
@@ -156,7 +157,7 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
       setTimeout(() => {
         setCurrentRound(prev => prev + 1)
         startRound()
-      }, 1500) // Brief pause before next round
+      }, 2000) // Brief pause before next round (increased from 1500ms)
     }
   }, [currentRound, questions, isPlaying, timeRemaining, streak, maxStreak, roundResults, startRound])
 

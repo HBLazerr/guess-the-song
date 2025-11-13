@@ -10,6 +10,7 @@ import SoundWave from '../SoundWave'
 import DynamicIslandVisualizer from '../DynamicIslandVisualizer'
 import VoiceInput from '../VoiceInput'
 import BrowseSelection, { type BrowseOption } from '../BrowseSelection'
+import AnswerReveal from '../AnswerReveal'
 import { useSpotify } from '@/hooks/useSpotify'
 import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer'
 import { useGameLogic } from '@/hooks/useGameLogic'
@@ -42,6 +43,7 @@ export default function GameScreen() {
 
   const fetchingRef = useRef(false)
   const hasStartedRef = useRef(false)
+  const processingAnswerRef = useRef(false)
 
   // Determine useSpotifyData options based on selection and navigation state
   const dataOptions = {
@@ -183,6 +185,15 @@ export default function GameScreen() {
   const handleAnswerClick = (answer: string) => {
     if (!isPlaying || showFeedback || !currentQuestion) return
 
+    // Prevent duplicate answer processing
+    if (processingAnswerRef.current) {
+      console.log('[Game] Ignoring duplicate answer submission')
+      return
+    }
+
+    processingAnswerRef.current = true
+    console.log('[Game] Processing answer:', answer)
+
     // Determine if the answer is correct
     const isCorrect = answer === currentQuestion.correctAnswer
 
@@ -195,11 +206,14 @@ export default function GameScreen() {
     setShowFeedback(true)
     handleAnswer(answer)
 
-    // Reset for next round
+    // Reset for next round - wait for reveal animation
+    // Note: Must be less than 2000ms to complete before round changes in useGameLogic
     setTimeout(() => {
       setShowFeedback(false)
       setAnswerFeedback(null)
-    }, 1500)
+      processingAnswerRef.current = false
+      console.log('[Game] Ready for next answer')
+    }, 1800)
   }
 
   const handleAlbumSelect = (album: BrowseOption) => {
@@ -427,6 +441,17 @@ export default function GameScreen() {
             />
           )}
         </motion.div>
+
+        {/* Answer Reveal Overlay */}
+        <AnswerReveal
+          key={currentRound}
+          show={showFeedback && answerFeedback !== null}
+          isCorrect={answerFeedback?.isCorrect || false}
+          correctAnswer={currentQuestion.correctAnswer}
+          trackName={currentQuestion.track.name}
+          artistName={currentQuestion.track.artists[0]}
+          albumArt={currentQuestion.track.album_art}
+        />
       </Container>
     </div>
   )

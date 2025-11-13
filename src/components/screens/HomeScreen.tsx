@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Music, User, Disc, Radio, LogOut, Crown, ArrowLeft } from 'lucide-react'
+import { Music, Radio, LogOut, Crown, ArrowLeft, Trophy, Target, Zap, Sparkles } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Container from '../ui/Container'
+import StatsCard from '../ui/StatsCard'
 import BrowseSelection, { type BrowseOption } from '../BrowseSelection'
 import { useSpotify } from '@/hooks/useSpotify'
 import { useSpotifyData } from '@/hooks/useSpotifyData'
 import { logout } from '@/lib/spotify'
+import { loadStats } from '@/lib/stats'
 import type { GameMode, SpotifyArtist, SpotifyAlbum } from '@/types'
 
 export default function HomeScreen() {
@@ -30,9 +32,6 @@ export default function HomeScreen() {
     fetchAlbums: true,
   })
 
-  // Fetch top albums for "Most Listened To" section
-  const { options: topAlbums } = useSpotifyData('album')
-
   // Check Premium status on mount
   useEffect(() => {
     if (user?.isPremium !== undefined) {
@@ -51,23 +50,11 @@ export default function HomeScreen() {
 
   const modes = [
     {
-      id: 'artist' as GameMode,
-      title: 'Artist Mode',
-      description: 'Guess the artist from your top tracks',
-      icon: User,
-    },
-    {
       id: 'genre' as GameMode,
       title: 'Track Mode',
       description: 'Name that tune from your favorites',
       icon: Radio,
       recommended: true,
-    },
-    {
-      id: 'album' as GameMode,
-      title: 'Album Mode',
-      description: 'Identify albums from your library',
-      icon: Disc,
     },
   ]
 
@@ -189,7 +176,7 @@ export default function HomeScreen() {
                 </Card>
                 <Card variant="glass" className="cursor-pointer hover:bg-white/10 transition-all" onClick={handleChooseAlbum}>
                   <div className="text-center p-lg">
-                    <Disc className="w-16 h-16 mx-auto mb-md text-primary" />
+                    <Music className="w-16 h-16 mx-auto mb-md text-primary" />
                     <h3 className="text-lg font-semibold mb-sm">Specific Album</h3>
                     <p className="text-sm text-white/70">Choose a specific album to focus on (easier)</p>
                   </div>
@@ -276,54 +263,68 @@ export default function HomeScreen() {
                 </p>
               </div>
 
-              {/* Most Listened To Section */}
-              {topAlbums && topAlbums.length > 0 && (
-                <div className="mb-xl">
-                  <h2 className="text-lg font-semibold mb-md">Your Most Listened To</h2>
-                  <div className="flex gap-md overflow-x-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent pb-md -mx-lg px-lg">
-                    {topAlbums.slice(0, 10).map((album, index) => (
-                      <motion.button
-                        key={album.id}
-                        onClick={() => {
-                          navigate('/game', {
-                            state: {
-                              mode: 'album',
-                              album: { id: album.id, name: album.name }
-                            }
-                          })
-                        }}
-                        className="flex-shrink-0 w-32 cursor-pointer group"
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: index * 0.05 }}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <div className="aspect-square rounded-md overflow-hidden mb-xs shadow-lg">
-                          {album.imageUrl ? (
-                            <img
-                              src={album.imageUrl}
-                              alt={album.name}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-white/10 flex items-center justify-center">
-                              <Music className="w-12 h-12 text-white/30" />
-                            </div>
-                          )}
+              {/* Stats Dashboard */}
+              {(() => {
+                const stats = loadStats()
+
+                if (stats.totalGames > 0) {
+                  return (
+                    <div className="mb-xl">
+                      <h2 className="text-lg font-semibold mb-md flex items-center gap-sm">
+                        <Sparkles className="w-5 h-5 text-primary" />
+                        Your Stats
+                      </h2>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
+                        <StatsCard
+                          icon={Trophy}
+                          label="Total Games"
+                          value={stats.totalGames}
+                          iconColor="text-yellow-400"
+                          delay={0.1}
+                        />
+                        <StatsCard
+                          icon={Target}
+                          label="All-Time Best"
+                          value={`${stats.bestScore}%`}
+                          subtitle={`${Math.round(stats.averageAccuracy)}% average`}
+                          iconColor="text-primary"
+                          delay={0.15}
+                        />
+                        <StatsCard
+                          icon={Zap}
+                          label="Current Streak"
+                          value={`${stats.currentStreak} day${stats.currentStreak !== 1 ? 's' : ''}`}
+                          subtitle={`${stats.maxStreak} day max`}
+                          iconColor="text-purple-400"
+                          delay={0.2}
+                        />
+                      </div>
+                    </div>
+                  )
+                } else {
+                  return (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      className="mb-xl"
+                    >
+                      <Card variant="glass">
+                        <div className="text-center py-lg">
+                          <Sparkles className="w-12 h-12 mx-auto mb-md text-primary" />
+                          <h3 className="text-lg font-semibold mb-sm">Ready to Start?</h3>
+                          <p className="text-sm text-white/70">
+                            Play your first game to start tracking your stats!
+                          </p>
                         </div>
-                        <p className="text-xs text-white/90 font-medium line-clamp-2 mb-1">{album.name}</p>
-                        {album.subtitle && (
-                          <p className="text-xs text-white/50 line-clamp-1">{album.subtitle}</p>
-                        )}
-                      </motion.button>
-                    ))}
-                  </div>
-                </div>
-              )}
+                      </Card>
+                    </motion.div>
+                  )
+                }
+              })()}
 
               {/* Mode Selection */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-lg mb-xl">
+              <div className="max-w-md mx-auto mb-xl">
                 {modes.map((mode, index) => {
                   const Icon = mode.icon
                   const isSelected = selectedMode === mode.id
