@@ -84,9 +84,61 @@ export class VoiceRecognizer {
       this.isListening = true
 
       this.recognition.onresult = (event: any) => {
+        // Get the top transcript (first alternative is usually best)
         const transcript = event.results[0][0].transcript
         this.isListening = false
         resolve(transcript)
+      }
+
+      this.recognition.onerror = (event: any) => {
+        this.isListening = false
+        const error: VoiceRecognitionError = {
+          code: this.mapErrorCode(event.error),
+          message: this.getErrorMessage(event.error),
+        }
+        reject(error)
+      }
+
+      this.recognition.onend = () => {
+        this.isListening = false
+      }
+
+      try {
+        this.recognition.start()
+      } catch (error) {
+        this.isListening = false
+        reject({
+          code: 'unknown' as const,
+          message: 'Failed to start voice recognition',
+        })
+      }
+    })
+  }
+
+  /**
+   * Start listening for speech with all alternative transcriptions
+   * Returns a promise that resolves with an array of alternatives
+   */
+  async listenWithAlternatives(): Promise<string[]> {
+    if (this.isListening) {
+      throw new Error('Already listening')
+    }
+
+    return new Promise((resolve, reject) => {
+      this.isListening = true
+
+      this.recognition.onresult = (event: any) => {
+        // Extract all alternatives from the recognition result
+        const alternatives: string[] = []
+        const resultList = event.results[0]
+
+        for (let i = 0; i < resultList.length; i++) {
+          alternatives.push(resultList[i].transcript)
+        }
+
+        console.log('[VoiceRecognizer] Captured alternatives:', alternatives)
+        this.isListening = false
+        resolve(alternatives)
       }
 
       this.recognition.onerror = (event: any) => {

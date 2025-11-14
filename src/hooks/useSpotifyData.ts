@@ -92,6 +92,10 @@ export function useSpotifyData(mode: GameMode, opts: UseSpotifyDataOptions = {})
         else if (opts.albumId) {
           fetchedOptions = await fetchAlbumTracksData(token, opts.albumId)
         }
+        // ALBUM MODE: If artistId provided, fetch albums from that artist
+        else if (mode === 'album' && opts.artistId) {
+          fetchedOptions = await fetchArtistAlbums(token, opts.artistId)
+        }
         // Default mode-based fetching
         else if (mode === 'artist') {
           fetchedOptions = await fetchTopArtists(token)

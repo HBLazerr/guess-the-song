@@ -35,7 +35,7 @@ export default function VoiceInput({
   const [error, setError] = useState<string | null>(null)
   const [recognizer] = useState(() => {
     if (isVoiceRecognitionSupported()) {
-      return new VoiceRecognizer({ language: 'en-US', continuous: false })
+      return new VoiceRecognizer({ language: 'en-US', continuous: false, maxAlternatives: 5 })
     }
     return null
   })
@@ -49,13 +49,16 @@ export default function VoiceInput({
       setTranscript('')
       setMatchedAnswer(null)
 
-      // Listen for speech
-      const spokenText = await recognizer.listen()
-      setTranscript(spokenText)
+      // Listen for speech with all alternatives
+      const alternatives = await recognizer.listenWithAlternatives()
+      const primaryTranscript = alternatives[0] || ''
+      setTranscript(primaryTranscript)
       setState('processing')
 
-      // Find best match
-      const match = findBestMatch(spokenText, possibleAnswers, 0.4)
+      console.log('[VoiceInput] Received alternatives:', alternatives)
+
+      // Find best match from all alternatives
+      const match = findBestMatch(alternatives, possibleAnswers, 0.4)
 
       if (match && match.confidence > 0.5) {
         // High confidence match
@@ -74,7 +77,7 @@ export default function VoiceInput({
         setState('idle')
       } else {
         // Low confidence or no match
-        setError(`Couldn't match "${spokenText}". Try again or browse manually.`)
+        setError(`Couldn't match "${primaryTranscript}". Try again or browse manually.`)
         setState('error')
         setTimeout(() => setState('idle'), 3000)
       }

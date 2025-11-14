@@ -185,13 +185,13 @@ export default function AnswerReveal({
               <motion.div
                 initial={{ scaleX: 0 }}
                 animate={{ scaleX: 1 }}
-                transition={{ duration: 1.8, ease: "linear" }}
+                transition={{ duration: 2.0, ease: "linear" }}
                 className="h-1 bg-primary/30 rounded-full overflow-hidden"
               >
                 <motion.div
                   initial={{ scaleX: 0 }}
                   animate={{ scaleX: 1 }}
-                  transition={{ duration: 1.8, ease: "linear" }}
+                  transition={{ duration: 2.0, ease: "linear" }}
                   className="h-full bg-primary origin-left"
                 />
               </motion.div>

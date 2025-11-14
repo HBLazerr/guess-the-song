@@ -9,8 +9,10 @@ import ProgressBar from '../ui/ProgressBar'
 import SoundWave from '../SoundWave'
 import DynamicIslandVisualizer from '../DynamicIslandVisualizer'
 import VoiceInput from '../VoiceInput'
-import BrowseSelection, { type BrowseOption } from '../BrowseSelection'
+import SongGuessInput from '../SongGuessInput'
+import BrowseSelection from '../BrowseSelection'
 import AnswerReveal from '../AnswerReveal'
+import type { BrowseOption } from '../BrowseSelection'
 import { useSpotify } from '@/hooks/useSpotify'
 import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer'
 import { useGameLogic } from '@/hooks/useGameLogic'
@@ -37,19 +39,15 @@ export default function GameScreen() {
     isCorrect: boolean
   } | null>(null)
 
-  // Hierarchical navigation state (for track mode with artist-only selection)
-  const [browseAlbum, setBrowseAlbum] = useState<BrowseOption | null>(null)
-  const showingAlbums = mode === 'genre' && selectedArtist && !selectedAlbum && !browseAlbum
-
   const fetchingRef = useRef(false)
   const hasStartedRef = useRef(false)
   const processingAnswerRef = useRef(false)
 
-  // Determine useSpotifyData options based on selection and navigation state
+  // Fetch options for autocomplete dropdown
   const dataOptions = {
     artistId: selectedArtist?.id,
-    albumId: browseAlbum?.id || selectedAlbum?.id,
-    fetchAlbums: showingAlbums,
+    albumId: selectedAlbum?.id,
+    fetchAlbums: false, // Always fetch tracks/artists/albums based on mode
   }
   const { options: browseOptions } = useSpotifyData(mode, dataOptions)
 
@@ -207,21 +205,13 @@ export default function GameScreen() {
     handleAnswer(answer)
 
     // Reset for next round - wait for reveal animation
-    // Note: Must be less than 2000ms to complete before round changes in useGameLogic
+    // Note: Must complete AFTER round changes in useGameLogic (2000ms)
     setTimeout(() => {
       setShowFeedback(false)
       setAnswerFeedback(null)
       processingAnswerRef.current = false
       console.log('[Game] Ready for next answer')
-    }, 1800)
-  }
-
-  const handleAlbumSelect = (album: BrowseOption) => {
-    setBrowseAlbum(album)
-  }
-
-  const handleBackToAlbums = () => {
-    setBrowseAlbum(null)
+    }, 2100)
   }
 
   const handleQuit = () => {
@@ -410,35 +400,64 @@ export default function GameScreen() {
             </Button>
           </div>
 
-          {/* Input Area */}
-          {inputMethod === 'voice' ? (
-            <VoiceInput
-              key={currentRound}
-              possibleAnswers={currentQuestion.options}
-              onAnswer={handleAnswerClick}
-              onSwitchToBrowse={() => setInputMethod('browse')}
-              disabled={!isPlaying || showFeedback}
-              answerFeedback={answerFeedback}
-            />
-          ) : (
-            <BrowseSelection
-              key={currentRound}
-              options={browseOptions}
-              mode={mode}
-              onSelect={handleAnswerClick}
-              disabled={!isPlaying || showFeedback}
-              answerFeedback={answerFeedback}
-              hierarchical={
-                selectedArtist && !selectedAlbum
-                  ? {
-                      showingAlbums: showingAlbums || false,
-                      selectedAlbum: browseAlbum || undefined,
-                      onAlbumSelect: handleAlbumSelect,
-                      onBack: handleBackToAlbums,
-                    }
-                  : undefined
-              }
-            />
+          {/* Input Area - Hide completely during feedback */}
+          {!showFeedback && (
+            <>
+              {inputMethod === 'voice' ? (
+                <VoiceInput
+                  key={currentRound}
+                  possibleAnswers={currentQuestion.options}
+                  onAnswer={handleAnswerClick}
+                  onSwitchToBrowse={() => setInputMethod('browse')}
+                  disabled={!isPlaying}
+                  answerFeedback={answerFeedback}
+                />
+              ) : (
+                <>
+                  {/* Autocomplete Input for Song Guessing */}
+                  <div key="song-guess-input-container">
+                    <SongGuessInput
+                      key={currentRound}
+                      options={browseOptions}
+                      onSelect={handleAnswerClick}
+                      disabled={!isPlaying}
+                      answerFeedback={answerFeedback}
+                      label={
+                        mode === 'artist'
+                          ? 'The artist is...'
+                          : mode === 'album'
+                          ? 'The album is called...'
+                          : 'The song is called...'
+                      }
+                    />
+                  </div>
+
+                  {/* Separator */}
+                  <div className="my-lg">
+                    <div className="flex items-center gap-md">
+                      <div className="flex-1 h-px bg-white/10"></div>
+                      <span className="text-xs text-white/40 uppercase tracking-wider">
+                        Or Browse Below
+                      </span>
+                      <div className="flex-1 h-px bg-white/10"></div>
+                    </div>
+                  </div>
+
+                  {/* Browse Grid - NO SEARCH BAR */}
+                  <div key="browse-selection-container">
+                    <BrowseSelection
+                      key={currentRound}
+                      options={browseOptions}
+                      mode={mode}
+                      onSelect={handleAnswerClick}
+                      disabled={!isPlaying}
+                      showSearch={false}
+                      answerFeedback={answerFeedback}
+                    />
+                  </div>
+                </>
+              )}
+            </>
           )}
         </motion.div>
 

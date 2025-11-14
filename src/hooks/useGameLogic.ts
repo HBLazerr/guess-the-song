@@ -76,10 +76,27 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
 
       // Build final options array
       const options = [correctAnswer, ...wrongAnswers]
+      const shuffledOptions = shuffleArray(options).slice(0, 4)
+
+      // VALIDATION: Ensure correct answer exists in shuffled options
+      if (!shuffledOptions.includes(correctAnswer)) {
+        console.error(
+          `[Game Logic] Validation failed: Correct answer "${correctAnswer}" not in options:`,
+          shuffledOptions,
+          '\nTrack:',
+          track.name,
+          '\nAll options before shuffle:',
+          options
+        )
+        // Force correct answer into a random position
+        const randomIndex = Math.floor(Math.random() * shuffledOptions.length)
+        shuffledOptions[randomIndex] = correctAnswer
+        console.warn(`[Game Logic] Fixed: Inserted correct answer at index ${randomIndex}`)
+      }
 
       return {
         track,
-        options: shuffleArray(options).slice(0, 4),
+        options: shuffledOptions,
         correctAnswer,
         round: index + 1,
       }
