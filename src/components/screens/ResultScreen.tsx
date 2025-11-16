@@ -1,11 +1,13 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef } from 'react'
-import { motion } from 'framer-motion'
-import { Trophy, Target, Zap, Home, RefreshCw, Share2, TrendingUp } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Trophy, Target, Zap, Home, RefreshCw, Share2, TrendingUp, Download, Instagram, MessageCircle, X } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Container from '../ui/Container'
 import { updateStatsWithGameResult, loadStats } from '@/lib/stats'
+import { generateResultImage, saveImageToDevice, shareToInstagramStory, shareToInstagramDM } from '@/lib/shareUtils'
+import { cn } from '@/lib/utils'
 import type { GameResult } from '@/types'
 
 export default function ResultScreen() {
@@ -14,6 +16,8 @@ export default function ResultScreen() {
   const result = location.state?.result as GameResult
   const [overallStats, setOverallStats] = useState({ totalGames: 0, bestScore: 0, averageAccuracy: 0 })
   const statsUpdatedRef = useRef(false)
+  const [showShareMenu, setShowShareMenu] = useState(false)
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false)
 
   if (!result) {
     navigate('/')
@@ -59,6 +63,53 @@ export default function ResultScreen() {
       navigator.clipboard.writeText(text)
       alert('Results copied to clipboard!')
     }
+  }
+
+  const handleSaveImage = async () => {
+    try {
+      setIsGeneratingImage(true)
+      const canvas = await generateResultImage({
+        totalScore: result.totalScore,
+        accuracy: result.accuracy,
+        maxStreak: result.maxStreak,
+        correctAnswers,
+        totalRounds,
+        mode: getModeLabel(),
+      })
+      await saveImageToDevice(canvas)
+      setShowShareMenu(false)
+    } catch (error) {
+      console.error('Error saving image:', error)
+      alert('Failed to save image. Please try again.')
+    } finally {
+      setIsGeneratingImage(false)
+    }
+  }
+
+  const handleShareToInstagramStory = async () => {
+    try {
+      setIsGeneratingImage(true)
+      const canvas = await generateResultImage({
+        totalScore: result.totalScore,
+        accuracy: result.accuracy,
+        maxStreak: result.maxStreak,
+        correctAnswers,
+        totalRounds,
+        mode: getModeLabel(),
+      })
+      await shareToInstagramStory(canvas)
+      setShowShareMenu(false)
+    } catch (error) {
+      console.error('Error sharing to Instagram:', error)
+      alert('Failed to share to Instagram. Please try saving the image instead.')
+    } finally {
+      setIsGeneratingImage(false)
+    }
+  }
+
+  const handleShareToInstagramDM = () => {
+    shareToInstagramDM()
+    setShowShareMenu(false)
   }
 
   const getModeLabel = () => {
@@ -236,14 +287,81 @@ export default function ResultScreen() {
               <Home className="w-5 h-5 mr-sm" />
               Home
             </Button>
-            <Button variant="secondary" onClick={() => navigate('/game', { state: { mode: result.mode } })}>
+            <Button variant="secondary" onClick={() => navigate('/game', { state: { mode: result.mode, playAgain: true } })}>
               <RefreshCw className="w-5 h-5 mr-sm" />
               Play Again
             </Button>
-            <Button variant="primary" onClick={handleShare}>
-              <Share2 className="w-5 h-5 mr-sm" />
-              Share
-            </Button>
+            <div className="relative">
+              <Button variant="primary" onClick={() => setShowShareMenu(!showShareMenu)}>
+                <Share2 className="w-5 h-5 mr-sm" />
+                Share
+              </Button>
+              
+              <AnimatePresence>
+                {showShareMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute bottom-full right-0 mb-sm z-50"
+                  >
+                    <Card variant="glass" className="p-md min-w-[200px]">
+                      <div className="flex items-center justify-between mb-md">
+                        <h4 className="text-sm font-semibold">Share Options</h4>
+                        <button
+                          onClick={() => setShowShareMenu(false)}
+                          className="text-white/50 hover:text-white transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="space-y-sm">
+                        <button
+                          onClick={handleShare}
+                          className="w-full flex items-center gap-sm p-sm rounded hover:bg-white/10 transition-colors text-left"
+                        >
+                          <Share2 className="w-4 h-4" />
+                          <span className="text-sm">Share Text</span>
+                        </button>
+                        <button
+                          onClick={handleSaveImage}
+                          disabled={isGeneratingImage}
+                          className={cn(
+                            "w-full flex items-center gap-sm p-sm rounded hover:bg-white/10 transition-colors text-left",
+                            "disabled:opacity-50 disabled:cursor-not-allowed"
+                          )}
+                        >
+                          <Download className="w-4 h-4" />
+                          <span className="text-sm">
+                            {isGeneratingImage ? 'Generating...' : 'Save Image'}
+                          </span>
+                        </button>
+                        <button
+                          onClick={handleShareToInstagramStory}
+                          disabled={isGeneratingImage}
+                          className={cn(
+                            "w-full flex items-center gap-sm p-sm rounded hover:bg-white/10 transition-colors text-left",
+                            "disabled:opacity-50 disabled:cursor-not-allowed"
+                          )}
+                        >
+                          <Instagram className="w-4 h-4" />
+                          <span className="text-sm">
+                            {isGeneratingImage ? 'Generating...' : 'Instagram Story'}
+                          </span>
+                        </button>
+                        <button
+                          onClick={handleShareToInstagramDM}
+                          className="w-full flex items-center gap-sm p-sm rounded hover:bg-white/10 transition-colors text-left"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span className="text-sm">Instagram DM</span>
+                        </button>
+                      </div>
+                    </Card>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
         </motion.div>
       </Container>

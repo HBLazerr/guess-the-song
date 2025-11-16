@@ -92,6 +92,10 @@ export function useSpotifyData(mode: GameMode, opts: UseSpotifyDataOptions = {})
         else if (opts.albumId) {
           fetchedOptions = await fetchAlbumTracksData(token, opts.albumId)
         }
+        // GENRE MODE: If artistId provided (playing all artist's songs), fetch tracks from that artist
+        else if (mode === 'genre' && opts.artistId) {
+          fetchedOptions = await fetchArtistTracks(token, opts.artistId)
+        }
         // ALBUM MODE: If artistId provided, fetch albums from that artist
         else if (mode === 'album' && opts.artistId) {
           fetchedOptions = await fetchArtistAlbums(token, opts.artistId)
@@ -228,4 +232,53 @@ async function fetchAlbumTracksData(token: string, albumId: string): Promise<Bro
     // Don't include imageUrl - all tracks have the same album cover (redundant)
     subtitle: track.artists[0]?.name,
   }))
+}
+
+async function fetchArtistTracks(token: string, artistId: string): Promise<BrowseOption[]> {
+  // First, get all albums from the artist
+  const albumsResponse = await fetch(
+    `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&market=US&limit=50`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+
+  if (!albumsResponse.ok) {
+    throw new Error('Failed to fetch artist albums')
+  }
+
+  const albumsData = await albumsResponse.json()
+  const albums = albumsData.items.slice(0, 10) // Limit to first 10 albums to avoid rate limits
+
+  // Fetch tracks from all albums
+  const trackMap = new Map<string, BrowseOption>()
+  
+  for (const album of albums) {
+    try {
+      const albumResponse = await fetch(
+        `https://api.spotify.com/v1/albums/${album.id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      
+      if (albumResponse.ok) {
+        const albumData = await albumResponse.json()
+        albumData.tracks.items.forEach((track: any) => {
+          // Use track ID as key to avoid duplicates
+          if (!trackMap.has(track.id)) {
+            trackMap.set(track.id, {
+              id: track.id,
+              name: track.name,
+              subtitle: track.artists[0]?.name,
+            })
+          }
+        })
+      }
+      
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 100))
+    } catch (error) {
+      console.warn(`Failed to fetch tracks from album ${album.id}:`, error)
+      // Continue with other albums
+    }
+  }
+
+  return Array.from(trackMap.values())
 }

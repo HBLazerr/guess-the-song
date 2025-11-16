@@ -17,6 +17,7 @@ import { useSpotify } from '@/hooks/useSpotify'
 import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer'
 import { useGameLogic } from '@/hooks/useGameLogic'
 import { useSpotifyData } from '@/hooks/useSpotifyData'
+import { saveGameState, loadGameState, clearGameState } from '@/lib/gameState'
 import type { GameMode, Track, SpotifyArtist, SpotifyAlbum } from '@/types'
 
 export default function GameScreen() {
@@ -25,12 +26,25 @@ export default function GameScreen() {
   const { getTracksForMode } = useSpotify()
   const { playTrack, pause, isReady, error: playerError } = useSpotifyPlayer()
 
-  const mode = (location.state?.mode as GameMode) || 'artist'
-  const selectedArtist = location.state?.artist as SpotifyArtist | undefined
-  const selectedAlbum = location.state?.album as SpotifyAlbum | undefined
+  // Check if this is a "play again" request
+  const isPlayAgain = location.state?.playAgain === true
+  
+  // Clear saved state if starting a new game (not play again)
+  useEffect(() => {
+    if (!isPlayAgain) {
+      clearGameState()
+    }
+  }, [isPlayAgain])
+  
+  // Try to load saved game state first if play again
+  const savedState = isPlayAgain ? loadGameState() : null
+  
+  const mode = savedState?.mode || (location.state?.mode as GameMode) || 'artist'
+  const selectedArtist = savedState?.artist || (location.state?.artist as SpotifyArtist | undefined)
+  const selectedAlbum = savedState?.album || (location.state?.album as SpotifyAlbum | undefined)
 
-  const [tracks, setTracks] = useState<Track[]>([])
-  const [isLoadingTracks, setIsLoadingTracks] = useState(true)
+  const [tracks, setTracks] = useState<Track[]>(savedState?.tracks || [])
+  const [isLoadingTracks, setIsLoadingTracks] = useState(!savedState)
   const [loadingMessage, setLoadingMessage] = useState('Preparing your quiz...')
   const [showFeedback, setShowFeedback] = useState(false)
   const [inputMethod, setInputMethod] = useState<'voice' | 'browse'>('browse')
@@ -69,6 +83,14 @@ export default function GameScreen() {
 
   // Load tracks on mount
   useEffect(() => {
+    // If we have saved state from play again, use it
+    if (savedState && savedState.tracks.length > 0 && isPlayAgain) {
+      console.log('[Game] Using saved game state for play again')
+      setTracks(savedState.tracks)
+      setIsLoadingTracks(false)
+      return
+    }
+
     // Prevent duplicate fetches (React StrictMode runs effects twice)
     if (fetchingRef.current) {
       console.log('[Game] Skipping duplicate fetch')
@@ -111,6 +133,15 @@ export default function GameScreen() {
         setTimeout(() => {
           setTracks(fetchedTracks)
           setIsLoadingTracks(false)
+          
+          // Save game state for play again functionality
+          saveGameState({
+            tracks: fetchedTracks,
+            mode,
+            artist: selectedArtist,
+            album: selectedAlbum,
+            timestamp: Date.now(),
+          })
         }, 500)
       })
       .catch((error) => {
@@ -134,7 +165,7 @@ export default function GameScreen() {
         fetchingRef.current = false // Reset on error so user can retry
         navigate('/')
       })
-  }, [mode, getTracksForMode, navigate])
+  }, [mode, getTracksForMode, navigate, selectedArtist, selectedAlbum, savedState])
 
   // Start first round when tracks are loaded
   useEffect(() => {

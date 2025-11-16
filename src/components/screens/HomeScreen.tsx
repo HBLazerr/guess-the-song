@@ -365,7 +365,15 @@ export default function HomeScreen() {
                             <Button
                               variant="primary"
                               size="md"
-                              onClick={() => setSelectedMode('genre')}
+                              onClick={() => {
+                                // Navigate to game with playAgain flag
+                                navigate('/game', { 
+                                  state: { 
+                                    mode: 'genre',
+                                    playAgain: true 
+                                  } 
+                                })
+                              }}
                               className="w-full"
                             >
                               Play Again

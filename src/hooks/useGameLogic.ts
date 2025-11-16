@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Track, QuizQuestion, RoundResult, GameResult, GameMode } from '@/types'
 import { shuffleArray, calculateScore } from '@/lib/utils'
+import { isMatch } from '@/lib/fuzzyMatch'
 
 const ROUND_TIME = 30 // seconds per round
 const MAX_ROUNDS = 10
@@ -137,7 +138,44 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
     if (!isPlaying || currentRound >= questions.length) return
 
     const question = questions[currentRound]
-    const isCorrect = answer === question.correctAnswer
+    
+    // For genre mode (track names), use fuzzy matching to handle duplicate song names
+    // e.g., "No Me Quise Ir" vs "No Me Quise Ir - Deluxe" vs "No Me Quise Ir (Remix)"
+    let isCorrect: boolean
+    if (mode === 'genre') {
+      // Use fuzzy matching for track names to handle variations
+      isCorrect = isMatch(answer, question.correctAnswer, 0.3) || answer === question.correctAnswer
+      
+      // Also check if the answer matches any similar track names from the same artist
+      if (!isCorrect && question.track.artists.length > 0) {
+        // Check all tracks to see if there's a similar name by the same artist
+        const allTracks = tracks.filter(t => 
+          t.artists[0] === question.track.artists[0] && 
+          t.name !== question.track.name
+        )
+        for (const track of allTracks) {
+          if (isMatch(answer, track.name, 0.3)) {
+            // Check if the base name matches (without suffixes like "- Deluxe", "(Remix)", etc.)
+            const baseName = question.correctAnswer
+              .replace(/\s*-\s*(Deluxe|Remix|Extended|Version|Edit).*$/i, '')
+              .replace(/\s*\(.*?\)\s*$/g, '')
+              .trim()
+            const answerBase = answer
+              .replace(/\s*-\s*(Deluxe|Remix|Extended|Version|Edit).*$/i, '')
+              .replace(/\s*\(.*?\)\s*$/g, '')
+              .trim()
+            
+            if (baseName.toLowerCase() === answerBase.toLowerCase()) {
+              isCorrect = true
+              break
+            }
+          }
+        }
+      }
+    } else {
+      // For artist and album modes, use exact match
+      isCorrect = answer === question.correctAnswer
+    }
     const newStreak = isCorrect ? streak + 1 : 0
     const points = calculateScore(isCorrect, timeRemaining, ROUND_TIME, streak)
 
@@ -176,7 +214,7 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
         startRound()
       }, 2000) // Brief pause before next round (increased from 1500ms)
     }
-  }, [currentRound, questions, isPlaying, timeRemaining, streak, maxStreak, roundResults, startRound])
+  }, [currentRound, questions, isPlaying, timeRemaining, streak, maxStreak, roundResults, startRound, mode, tracks])
 
   const finishGame = (results: RoundResult[]) => {
     const correctAnswers = results.filter(r => r.isCorrect).length
