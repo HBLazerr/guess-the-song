@@ -17,6 +17,8 @@ export interface FuzzyMatchResult {
  */
 function normalizeString(str: string): string {
   return str
+    .normalize('NFD')  // Decompose characters with accents
+    .replace(/[\u0300-\u036f]/g, '')  // Remove diacritical marks
     .toLowerCase()
     .trim()
     // Remove common prefixes

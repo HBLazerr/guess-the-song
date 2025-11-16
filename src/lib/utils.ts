@@ -55,6 +55,24 @@ export function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+// Remove accents/diacritics from a string for accent-insensitive comparison
+// Example: "José" → "Jose", "Estás" → "Estas", "Mí" → "Mi"
+export function removeAccents(str: string): string {
+  return str
+    .normalize('NFD')  // Decompose characters (é → e + combining accent)
+    .replace(/[\u0300-\u036f]/g, '')  // Remove diacritical marks
+}
+
+// Normalize track name by removing common variations
+export function normalizeTrackName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\s*[\(\[].*?(deluxe|remix|remaster|edit|version|extended|radio|acoustic|live|instrumental|explicit).*?[\)\]]/gi, '')
+    .replace(/\s*-\s*(deluxe|remix|remaster|edit|version|extended|radio|acoustic|live|instrumental|explicit).*$/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // Find the best segment to play from audio analysis
 export function findBestSegment(analysis: any): number {
   if (!analysis || !analysis.sections || analysis.sections.length === 0) {

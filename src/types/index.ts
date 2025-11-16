@@ -37,6 +37,7 @@ export interface QuizQuestion {
   track: Track
   options: string[]
   correctAnswer: string
+  correctAnswers: string[] // All acceptable variations of the correct answer
   round: number
 }
 

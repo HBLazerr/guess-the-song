@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Search, Music } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, removeAccents } from '@/lib/utils'
 import type { GameMode } from '@/types'
 
 export interface BrowseOption {
@@ -35,15 +35,15 @@ export default function BrowseSelection({
 }: BrowseSelectionProps) {
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Filter options based on search query
+  // Filter options based on search query (accent-insensitive)
   const filteredOptions = useMemo(() => {
     if (!searchQuery.trim()) return options
 
-    const query = searchQuery.toLowerCase()
+    const normalizedQuery = removeAccents(searchQuery.toLowerCase())
     return options.filter((option) => {
-      const nameMatch = option.name.toLowerCase().includes(query)
-      const subtitleMatch = option.subtitle?.toLowerCase().includes(query)
-      return nameMatch || subtitleMatch
+      const normalizedName = removeAccents(option.name.toLowerCase())
+      const normalizedSubtitle = option.subtitle ? removeAccents(option.subtitle.toLowerCase()) : ''
+      return normalizedName.includes(normalizedQuery) || normalizedSubtitle.includes(normalizedQuery)
     })
   }, [options, searchQuery])
 

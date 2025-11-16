@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Clock, Trophy, Zap, X, Mic, Grid3x3 } from 'lucide-react'
+import { Clock, Trophy, Zap, X, Mic, Grid3x3, ArrowLeft } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Container from '../ui/Container'
@@ -18,6 +18,7 @@ import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer'
 import { useGameLogic } from '@/hooks/useGameLogic'
 import { useSpotifyData } from '@/hooks/useSpotifyData'
 import { saveGameState, loadGameState, clearGameState } from '@/lib/gameState'
+import { isMatch } from '@/lib/fuzzyMatch'
 import type { GameMode, Track, SpotifyArtist, SpotifyAlbum } from '@/types'
 
 export default function GameScreen() {
@@ -53,17 +54,34 @@ export default function GameScreen() {
     isCorrect: boolean
   } | null>(null)
 
+  // Browse navigation state for two-step album→song selection (All Albums mode)
+  const [browseView, setBrowseView] = useState<'albums' | 'songs'>('albums')
+  const [selectedBrowseAlbum, setSelectedBrowseAlbum] = useState<BrowseOption | null>(null)
+
   const fetchingRef = useRef(false)
   const hasStartedRef = useRef(false)
   const processingAnswerRef = useRef(false)
 
-  // Fetch options for autocomplete dropdown
-  const dataOptions = {
+  // Detect "All Albums" mode (genre mode with artist selected but no specific album)
+  const isAllAlbumsMode = mode === 'genre' && selectedArtist?.id && !selectedAlbum?.id
+
+  // Browse grid options - In "All Albums" mode, fetch albums first, then songs from selected album
+  const browseDataOptions = {
     artistId: selectedArtist?.id,
-    albumId: selectedAlbum?.id,
-    fetchAlbums: false, // Always fetch tracks/artists/albums based on mode
+    albumId: isAllAlbumsMode
+      ? selectedBrowseAlbum?.id  // Use browse-selected album for songs
+      : selectedAlbum?.id,        // Use home-selected album for songs
+    fetchAlbums: (isAllAlbumsMode && browseView === 'albums') || false, // Fetch albums in first step
   }
-  const { options: browseOptions } = useSpotifyData(mode, dataOptions)
+  const { options: browseOptions } = useSpotifyData(mode, browseDataOptions)
+
+  // Search autocomplete options - ALWAYS show all songs (not filtered by selected album)
+  const searchDataOptions = {
+    artistId: selectedArtist?.id,
+    albumId: isAllAlbumsMode ? undefined : selectedAlbum?.id, // Don't filter by album in All Albums mode
+    fetchAlbums: false, // Never fetch albums for search
+  }
+  const { options: searchOptions } = useSpotifyData(mode, searchDataOptions)
 
   const {
     currentQuestion,
@@ -211,7 +229,26 @@ export default function GameScreen() {
     }
   }, [gameResult, navigate])
 
+  // Reset browse navigation on new round (All Albums mode)
+  useEffect(() => {
+    if (isAllAlbumsMode) {
+      setBrowseView('albums')
+      setSelectedBrowseAlbum(null)
+    }
+  }, [currentRound, isAllAlbumsMode])
+
   const handleAnswerClick = (answer: string) => {
+    // NEW: If in All Albums mode and viewing albums, drill down instead of answering
+    if (isAllAlbumsMode && browseView === 'albums') {
+      const album = browseOptions.find(opt => opt.name === answer)
+      if (album) {
+        console.log('[Game] Album selected for browsing:', album.name)
+        setSelectedBrowseAlbum(album)
+        setBrowseView('songs')
+        return // Don't process as answer
+      }
+    }
+
     if (!isPlaying || showFeedback || !currentQuestion) return
 
     // Prevent duplicate answer processing
@@ -223,8 +260,18 @@ export default function GameScreen() {
     processingAnswerRef.current = true
     console.log('[Game] Processing answer:', answer)
 
-    // Determine if the answer is correct
-    const isCorrect = answer === currentQuestion.correctAnswer
+    // Determine if the answer is correct - check against all acceptable variations
+    const isCorrect = currentQuestion.correctAnswers.some(correct => {
+      // Exact match
+      if (answer === correct) return true
+
+      // Fuzzy match as fallback (handles typos) - only for genre mode
+      if (mode === 'genre') {
+        return isMatch(answer, correct, 0.3)
+      }
+
+      return false
+    })
 
     // Set feedback state for visual feedback
     setAnswerFeedback({
@@ -449,7 +496,7 @@ export default function GameScreen() {
                   <div key="song-guess-input-container">
                     <SongGuessInput
                       key={currentRound}
-                      options={browseOptions}
+                      options={searchOptions}
                       onSelect={handleAnswerClick}
                       disabled={!isPlaying}
                       answerFeedback={answerFeedback}
@@ -476,6 +523,28 @@ export default function GameScreen() {
 
                   {/* Browse Grid - NO SEARCH BAR */}
                   <div key="browse-selection-container">
+                    {/* Back Button and Album Info (All Albums mode only) */}
+                    {isAllAlbumsMode && browseView === 'songs' && (
+                      <div className="mb-md">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setBrowseView('albums')
+                            setSelectedBrowseAlbum(null)
+                          }}
+                          disabled={!isPlaying || showFeedback}
+                          className="mb-sm"
+                        >
+                          <ArrowLeft className="w-4 h-4 mr-sm" />
+                          Back to Albums
+                        </Button>
+                        <p className="text-sm text-white/60">
+                          Viewing songs from: <span className="font-semibold text-white/90">{selectedBrowseAlbum?.name}</span>
+                        </p>
+                      </div>
+                    )}
+
                     <BrowseSelection
                       key={currentRound}
                       options={browseOptions}
