@@ -8,7 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <!-- Load Spotify SDK asynchronously to avoid blocking initial render -->
+    <script src="https://sdk.scdn.co/spotify-player.js" async defer></script>
   </head>
   <body>
     <div id="root"></div>

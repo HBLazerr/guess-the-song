@@ -82,9 +82,8 @@ export default function HomeScreen() {
 
   const handlePlayAllAlbums = () => {
     if (selectedArtist) {
-      navigate('/game', {
+      navigate('/settings', {
         state: {
-          mode: 'genre',
           artist: { id: selectedArtist.id, name: selectedArtist.name } as SpotifyArtist,
         },
       })
@@ -99,9 +98,8 @@ export default function HomeScreen() {
   const handleAlbumSelected = (albumName: string) => {
     const album = albumOptions.find((a) => a.name === albumName)
     if (album && selectedArtist) {
-      navigate('/game', {
+      navigate('/settings', {
         state: {
-          mode: 'genre',
           artist: { id: selectedArtist.id, name: selectedArtist.name } as SpotifyArtist,
           album: { id: album.id, name: album.name } as SpotifyAlbum,
         },
@@ -362,22 +360,6 @@ export default function HomeScreen() {
                                 </div>
                               </div>
                             </div>
-                            <Button
-                              variant="primary"
-                              size="md"
-                              onClick={() => {
-                                // Navigate to game with playAgain flag
-                                navigate('/game', { 
-                                  state: { 
-                                    mode: 'genre',
-                                    playAgain: true 
-                                  } 
-                                })
-                              }}
-                              className="w-full"
-                            >
-                              Play Again
-                            </Button>
                           </Card>
                         </motion.div>
                       )}

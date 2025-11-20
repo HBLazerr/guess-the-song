@@ -246,7 +246,7 @@ async function fetchArtistTracks(token: string, artistId: string): Promise<Brows
   }
 
   const albumsData = await albumsResponse.json()
-  const albums = albumsData.items.slice(0, 10) // Limit to first 10 albums to avoid rate limits
+  const albums = albumsData.items // Use all albums (up to 50 from API) for complete search
 
   // Fetch tracks from all albums
   const trackMap = new Map<string, BrowseOption>()

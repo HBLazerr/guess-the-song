@@ -1,26 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import type { Track, QuizQuestion, RoundResult, GameResult, GameMode } from '@/types'
+import type { Track, QuizQuestion, RoundResult, GameResult, GameMode, GameSettings } from '@/types'
 import { shuffleArray, calculateScore, normalizeTrackName } from '@/lib/utils'
 import { isMatch } from '@/lib/fuzzyMatch'
+import { getTimeInSeconds, getRoundsCount, PAUSE_BETWEEN_ROUNDS } from '@/lib/gameSettings'
 
-const ROUND_TIME = 30 // seconds per round
-const MAX_ROUNDS = 10
-const MIN_ROUNDS = 5
+export function useGameLogic(tracks: Track[], mode: GameMode, settings: GameSettings) {
+  // Extract settings values
+  const ROUND_TIME = getTimeInSeconds(settings.timePerRound)
 
-export function useGameLogic(tracks: Track[], mode: GameMode) {
-  // Calculate dynamic rounds based on available tracks
-  // We need at least 4 unique tracks per question (1 correct + 3 wrong)
-  // But tracks can be reused across questions, so we use a conservative estimate
-  const calculateRounds = (trackCount: number): number => {
-    if (trackCount < 4) return 0
-    // Conservative formula: allow more rounds if we have more tracks
-    const maxPossibleRounds = Math.floor(trackCount / 1.5)
-    const rounds = Math.min(MAX_ROUNDS, Math.max(MIN_ROUNDS, maxPossibleRounds))
-    console.log(`[Game Logic] ${trackCount} tracks available → ${rounds} rounds`)
-    return rounds
-  }
-
-  const totalRounds = useMemo(() => calculateRounds(tracks.length), [tracks.length])
+  // Calculate rounds based on settings
+  const totalRounds = useMemo(() => {
+    return getRoundsCount(settings.rounds, tracks.length)
+  }, [tracks.length, settings.rounds])
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([])
   const [currentRound, setCurrentRound] = useState(0)
@@ -37,9 +28,25 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
   const generateQuestions = useCallback(() => {
     if (tracks.length < 4) return []
 
-    const rounds = calculateRounds(tracks.length)
-    const shuffledTracks = shuffleArray(tracks)
-    const selectedTracks = shuffledTracks.slice(0, Math.min(rounds, shuffledTracks.length))
+    // Deduplicate tracks for question selection in genre mode
+    // This prevents songs like "J.", "J. - Deluxe", "J. - Remix" from all appearing as separate questions
+    // But we keep the original tracks array for building correctAnswers (preserving variations)
+    let tracksForQuestions = tracks
+    if (mode === 'genre') {
+      const trackMap = new Map<string, Track>()
+      tracks.forEach(track => {
+        const normalizedName = normalizeTrackName(track.name)
+        const key = `${normalizedName}-${track.artists[0].toLowerCase()}`
+        if (!trackMap.has(key)) {
+          trackMap.set(key, track) // Keep first occurrence (cleanest version preferred)
+        }
+      })
+      tracksForQuestions = Array.from(trackMap.values())
+      console.log(`[Game Logic] Deduplicated ${tracks.length} → ${tracksForQuestions.length} tracks for question selection`)
+    }
+
+    const shuffledTracks = shuffleArray(tracksForQuestions)
+    const selectedTracks = shuffledTracks.slice(0, Math.min(totalRounds, tracksForQuestions.length))
 
     return selectedTracks.map((track, index) => {
       let correctAnswer: string
@@ -64,16 +71,32 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
       if (mode === 'genre') {
         // For genre mode, find all tracks by the same artist with matching normalized names
         const normalizedCorrect = normalizeTrackName(correctAnswer)
-        const similarTracks = tracks.filter(t =>
-          t.artists[0] === track.artists[0] && // Same artist
-          normalizeTrackName(getOptionValue(t)) === normalizedCorrect // Same normalized name
-        )
+        console.log(`[Game Logic] Round ${index + 1}: Normalizing "${correctAnswer}" → "${normalizedCorrect}"`)
+
+        const similarTracks = tracks.filter(t => {
+          const sameArtist = t.artists[0] === track.artists[0]
+          const normalizedOption = normalizeTrackName(getOptionValue(t))
+          const sameNormalizedName = normalizedOption === normalizedCorrect
+
+          // Debug log for tracks with similar names but different artists
+          if (sameNormalizedName && !sameArtist) {
+            console.log(`[Game Logic] Skipping "${t.name}" by "${t.artists[0]}" (different artist)`)
+          }
+
+          return sameArtist && sameNormalizedName
+        })
 
         // Get all unique variations of the song name
         const variations = new Set<string>(similarTracks.map(t => t.name))
         correctAnswers = Array.from(variations)
 
-        console.log(`[Game Logic] Found ${correctAnswers.length} variations for "${correctAnswer}":`, correctAnswers)
+        console.log(`[Game Logic] ✓ Found ${correctAnswers.length} variation(s) for "${correctAnswer}":`, correctAnswers)
+        if (correctAnswers.length === 1) {
+          console.log(`[Game Logic] ⚠️ Only 1 variation found - searching all ${tracks.length} tracks for artist "${track.artists[0]}"`)
+          // Additional debug: show first 5 tracks by this artist
+          const artistTracks = tracks.filter(t => t.artists[0] === track.artists[0]).slice(0, 5)
+          console.log(`[Game Logic] Sample tracks by this artist:`, artistTracks.map(t => ({ name: t.name, normalized: normalizeTrackName(t.name) })))
+        }
       }
 
       // Collect unique wrong answers (avoid duplicates and exclude all correct variations)
@@ -126,7 +149,7 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
         round: index + 1,
       }
     })
-  }, [tracks, mode])
+  }, [tracks, mode, totalRounds])
 
   // Initialize questions
   useEffect(() => {
@@ -206,14 +229,17 @@ export function useGameLogic(tracks: Track[], mode: GameMode) {
     // Stop playing
     setIsPlaying(false)
 
-    // Move to next round or finish game
+    // Move to next round or finish game (with delay for answer reveal)
     if (currentRound + 1 >= questions.length) {
-      finishGame([...roundResults, result])
+      // Last round - wait for answer reveal before showing results
+      setTimeout(() => {
+        finishGame([...roundResults, result])
+      }, PAUSE_BETWEEN_ROUNDS)
     } else {
       setTimeout(() => {
         setCurrentRound(prev => prev + 1)
         startRound()
-      }, 2000) // Brief pause before next round (increased from 1500ms)
+      }, PAUSE_BETWEEN_ROUNDS)
     }
   }, [currentRound, questions, isPlaying, timeRemaining, streak, maxStreak, roundResults, startRound, mode])
 

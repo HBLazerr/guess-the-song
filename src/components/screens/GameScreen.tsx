@@ -17,35 +17,23 @@ import { useSpotify } from '@/hooks/useSpotify'
 import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer'
 import { useGameLogic } from '@/hooks/useGameLogic'
 import { useSpotifyData } from '@/hooks/useSpotifyData'
-import { saveGameState, loadGameState, clearGameState } from '@/lib/gameState'
+import { DEFAULT_SETTINGS, getTimeInSeconds } from '@/lib/gameSettings'
 import { isMatch } from '@/lib/fuzzyMatch'
-import type { GameMode, Track, SpotifyArtist, SpotifyAlbum } from '@/types'
+import type { GameMode, Track, SpotifyArtist, SpotifyAlbum, GameSettings } from '@/types'
 
 export default function GameScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const { getTracksForMode } = useSpotify()
-  const { playTrack, pause, isReady, error: playerError } = useSpotifyPlayer()
+  const { playTrack, pause, resume, isReady, error: playerError } = useSpotifyPlayer()
 
-  // Check if this is a "play again" request
-  const isPlayAgain = location.state?.playAgain === true
-  
-  // Clear saved state if starting a new game (not play again)
-  useEffect(() => {
-    if (!isPlayAgain) {
-      clearGameState()
-    }
-  }, [isPlayAgain])
-  
-  // Try to load saved game state first if play again
-  const savedState = isPlayAgain ? loadGameState() : null
-  
-  const mode = savedState?.mode || (location.state?.mode as GameMode) || 'artist'
-  const selectedArtist = savedState?.artist || (location.state?.artist as SpotifyArtist | undefined)
-  const selectedAlbum = savedState?.album || (location.state?.album as SpotifyAlbum | undefined)
+  const mode = (location.state?.mode as GameMode) || 'artist'
+  const selectedArtist = location.state?.artist as SpotifyArtist | undefined
+  const selectedAlbum = location.state?.album as SpotifyAlbum | undefined
+  const gameSettings = (location.state?.settings as GameSettings | undefined) || DEFAULT_SETTINGS
 
-  const [tracks, setTracks] = useState<Track[]>(savedState?.tracks || [])
-  const [isLoadingTracks, setIsLoadingTracks] = useState(!savedState)
+  const [tracks, setTracks] = useState<Track[]>([])
+  const [isLoadingTracks, setIsLoadingTracks] = useState(true)
   const [loadingMessage, setLoadingMessage] = useState('Preparing your quiz...')
   const [showFeedback, setShowFeedback] = useState(false)
   const [inputMethod, setInputMethod] = useState<'voice' | 'browse'>('browse')
@@ -97,18 +85,10 @@ export default function GameScreen() {
     handleAnswer,
     pauseGame,
     resumeGame,
-  } = useGameLogic(tracks, mode)
+  } = useGameLogic(tracks, mode, gameSettings)
 
   // Load tracks on mount
   useEffect(() => {
-    // If we have saved state from play again, use it
-    if (savedState && savedState.tracks.length > 0 && isPlayAgain) {
-      console.log('[Game] Using saved game state for play again')
-      setTracks(savedState.tracks)
-      setIsLoadingTracks(false)
-      return
-    }
-
     // Prevent duplicate fetches (React StrictMode runs effects twice)
     if (fetchingRef.current) {
       console.log('[Game] Skipping duplicate fetch')
@@ -148,19 +128,9 @@ export default function GameScreen() {
         }
 
         setLoadingMessage('Preparing your quiz...')
-        setTimeout(() => {
-          setTracks(fetchedTracks)
-          setIsLoadingTracks(false)
-          
-          // Save game state for play again functionality
-          saveGameState({
-            tracks: fetchedTracks,
-            mode,
-            artist: selectedArtist,
-            album: selectedAlbum,
-            timestamp: Date.now(),
-          })
-        }, 500)
+        // Start immediately - no artificial delay
+        setTracks(fetchedTracks)
+        setIsLoadingTracks(false)
       })
       .catch((error) => {
         console.error('Failed to load tracks:', error)
@@ -183,7 +153,7 @@ export default function GameScreen() {
         fetchingRef.current = false // Reset on error so user can retry
         navigate('/')
       })
-  }, [mode, getTracksForMode, navigate, selectedArtist, selectedAlbum, savedState])
+  }, [mode, getTracksForMode, navigate, selectedArtist, selectedAlbum])
 
   // Start first round when tracks are loaded
   useEffect(() => {
@@ -198,17 +168,32 @@ export default function GameScreen() {
     }
   }, [isLoadingTracks, tracks, currentRound, isPlaying, startRound])
 
+  // Track whether current track has been started
+  const trackStartedRef = useRef(false)
+  const currentTrackIdRef = useRef<string | null>(null)
+
   // Handle audio playback with Web Playback SDK
   useEffect(() => {
     if (currentQuestion && isPlaying && !isPaused && isReady) {
-      // Use the calculated best start time (in seconds) and convert to milliseconds
-      const startTime = currentQuestion.track.startTime || 30
-      const startTimeMs = startTime * 1000
+      const currentTrackId = currentQuestion.track.id
 
-      console.log(`[Playback] Starting "${currentQuestion.track.name}" at ${startTime}s (${startTimeMs}ms) via Web Playback SDK`)
+      // Check if this is a new track or just resuming
+      if (currentTrackIdRef.current !== currentTrackId || !trackStartedRef.current) {
+        // New track - start from beginning
+        const startTime = currentQuestion.track.startTime || 30
+        const startTimeMs = startTime * 1000
 
-      // Play track using Web Playback SDK
-      playTrack(currentQuestion.track.id, startTimeMs)
+        console.log(`[Playback] Starting "${currentQuestion.track.name}" at ${startTime}s (${startTimeMs}ms) via Web Playback SDK`)
+
+        // Play track using Web Playback SDK
+        playTrack(currentQuestion.track.id, startTimeMs)
+        trackStartedRef.current = true
+        currentTrackIdRef.current = currentTrackId
+      } else {
+        // Same track - just resume from current position
+        console.log(`[Playback] Resuming "${currentQuestion.track.name}" from current position`)
+        resume()
+      }
     } else if ((isPaused || !isPlaying) && isReady) {
       // Only pause when player is ready AND we're in pause state
       pause()
@@ -220,7 +205,15 @@ export default function GameScreen() {
         pause()
       }
     }
-  }, [currentQuestion, isPlaying, isPaused, isReady, playTrack, pause])
+  }, [currentQuestion, isPlaying, isPaused, isReady, playTrack, pause, resume])
+
+  // Reset track started ref when question changes
+  useEffect(() => {
+    if (currentQuestion) {
+      trackStartedRef.current = false
+      currentTrackIdRef.current = null
+    }
+  }, [currentQuestion])
 
   // Navigate to results when game is complete
   useEffect(() => {
@@ -237,9 +230,10 @@ export default function GameScreen() {
     }
   }, [currentRound, isAllAlbumsMode])
 
-  const handleAnswerClick = (answer: string) => {
-    // NEW: If in All Albums mode and viewing albums, drill down instead of answering
-    if (isAllAlbumsMode && browseView === 'albums') {
+  const handleAnswerClick = (answer: string, source: 'search' | 'browse' | 'voice' = 'browse') => {
+    // If in All Albums mode and viewing albums, drill down when clicking from browse grid
+    // Skip this logic for search autocomplete and voice input
+    if (source === 'browse' && isAllAlbumsMode && browseView === 'albums') {
       const album = browseOptions.find(opt => opt.name === answer)
       if (album) {
         console.log('[Game] Album selected for browsing:', album.name)
@@ -329,6 +323,18 @@ export default function GameScreen() {
 
   const progressPercent = (currentRound / totalRounds) * 100
 
+  // Calculate dynamic timer color thresholds based on time setting
+  const totalTime = getTimeInSeconds(gameSettings.timePerRound)
+  const criticalThreshold = Math.ceil(totalTime * 0.25) // Last 25% = red
+  const warningThreshold = Math.ceil(totalTime * 0.5)   // Last 50% = yellow
+
+  // Determine timer color based on dynamic thresholds
+  const getTimerColor = () => {
+    if (timeRemaining <= criticalThreshold) return 'text-red-500'
+    if (timeRemaining <= warningThreshold) return 'text-yellow-500'
+    return 'text-green-500'
+  }
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-lg">
       <Container className="max-w-4xl">
@@ -360,30 +366,16 @@ export default function GameScreen() {
             <motion.div
               className="flex items-center gap-sm"
               animate={{
-                scale: timeRemaining <= 10 ? [1, 1.05, 1] : 1,
+                scale: timeRemaining <= criticalThreshold ? [1, 1.05, 1] : 1,
               }}
               transition={{
-                duration: timeRemaining <= 5 ? 0.5 : 0.8,
-                repeat: timeRemaining <= 10 ? Infinity : 0,
+                duration: timeRemaining <= criticalThreshold ? 0.5 : 0.8,
+                repeat: timeRemaining <= criticalThreshold ? Infinity : 0,
                 ease: 'easeInOut',
               }}
             >
-              <Clock
-                className={`w-6 h-6 ${
-                  timeRemaining <= 5 ? 'text-red-500' :
-                  timeRemaining <= 10 ? 'text-yellow-500' :
-                  timeRemaining <= 20 ? 'text-yellow-400' :
-                  'text-green-500'
-                }`}
-              />
-              <span
-                className={`text-2xl font-bold ${
-                  timeRemaining <= 5 ? 'text-red-500' :
-                  timeRemaining <= 10 ? 'text-yellow-500' :
-                  timeRemaining <= 20 ? 'text-yellow-400' :
-                  'text-green-500'
-                }`}
-              >
+              <Clock className={`w-6 h-6 ${getTimerColor()}`} />
+              <span className={`text-2xl font-bold ${getTimerColor()}`}>
                 {timeRemaining}s
               </span>
             </motion.div>
@@ -405,9 +397,9 @@ export default function GameScreen() {
           {/* Dynamic Island Visualization */}
           <Card
             variant="glass"
-            className="mb-xl cursor-pointer"
+            className={`mb-xl ${gameSettings.allowPause && isPlaying && !showFeedback ? 'cursor-pointer' : ''}`}
             onClick={() => {
-              if (isPlaying && !showFeedback) {
+              if (gameSettings.allowPause && isPlaying && !showFeedback) {
                 if (isPaused) {
                   resumeGame()
                 } else {
@@ -422,8 +414,8 @@ export default function GameScreen() {
                 className="mb-md"
               />
 
-              {/* Pause hint text */}
-              {isPlaying && (
+              {/* Pause hint text - only show if pause is allowed */}
+              {isPlaying && gameSettings.allowPause && (
                 <motion.p
                   className={`text-sm mb-lg ${
                     isPaused ? 'text-yellow-400 font-medium' : 'text-white/50'
@@ -485,7 +477,7 @@ export default function GameScreen() {
                 <VoiceInput
                   key={currentRound}
                   possibleAnswers={currentQuestion.options}
-                  onAnswer={handleAnswerClick}
+                  onAnswer={(answer) => handleAnswerClick(answer, 'voice')}
                   onSwitchToBrowse={() => setInputMethod('browse')}
                   disabled={!isPlaying}
                   answerFeedback={answerFeedback}
@@ -497,7 +489,7 @@ export default function GameScreen() {
                     <SongGuessInput
                       key={currentRound}
                       options={searchOptions}
-                      onSelect={handleAnswerClick}
+                      onSelect={(answer) => handleAnswerClick(answer, 'search')}
                       disabled={!isPlaying}
                       answerFeedback={answerFeedback}
                       label={

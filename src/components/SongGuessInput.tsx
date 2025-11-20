@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { cn, removeAccents } from '@/lib/utils'
+import { cn, normalizeForSearch } from '@/lib/utils'
 
 export interface SongGuessOption {
   id: string
@@ -34,15 +34,15 @@ export default function SongGuessInput({
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Filter options based on input (accent-insensitive)
+  // Filter options based on input (accent-insensitive, apostrophe-insensitive, punctuation-insensitive)
   const filteredOptions = useMemo(() => {
     if (!inputValue.trim()) return []
 
-    const normalizedQuery = removeAccents(inputValue.toLowerCase())
+    const normalizedQuery = normalizeForSearch(inputValue)
     return options
       .filter((option) => {
-        const normalizedName = removeAccents(option.name.toLowerCase())
-        const normalizedSubtitle = option.subtitle ? removeAccents(option.subtitle.toLowerCase()) : ''
+        const normalizedName = normalizeForSearch(option.name)
+        const normalizedSubtitle = option.subtitle ? normalizeForSearch(option.subtitle) : ''
         return normalizedName.includes(normalizedQuery) || normalizedSubtitle.includes(normalizedQuery)
       })
       .slice(0, 8) // Show max 8 results

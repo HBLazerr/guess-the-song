@@ -63,12 +63,34 @@ export function removeAccents(str: string): string {
     .replace(/[\u0300-\u036f]/g, '')  // Remove diacritical marks
 }
 
+// Normalize string for search - removes accents, apostrophes, and special chars
+// Example: "I'll" → "ill", "José's" → "joses", "Don't" → "dont"
+export function normalizeForSearch(str: string): string {
+  return str
+    .normalize('NFD')  // Decompose characters (é → e + combining accent)
+    .replace(/[\u0300-\u036f]/g, '')  // Remove diacritical marks
+    .replace(/['']/g, '')  // Remove apostrophes (both straight and curly)
+    .replace(/[^\w\s]/g, '')  // Remove all non-alphanumeric chars except spaces
+    .toLowerCase()
+    .trim()
+}
+
 // Normalize track name by removing common variations
+// Handles multiple formats: "Song - Deluxe", "Song (Deluxe)", "Song [Deluxe Edition]", "Song-Deluxe", etc.
 export function normalizeTrackName(name: string): string {
+  const keywords = 'deluxe|remix|remaster|remastered|edit|edited|version|extended|radio|acoustic|live|instrumental|explicit|clean|bonus|track|edition|ep|single|demo|alternate|alt|feat\\.?|ft\\.?|featuring'
+
   return name
     .toLowerCase()
-    .replace(/\s*[\(\[].*?(deluxe|remix|remaster|edit|version|extended|radio|acoustic|live|instrumental|explicit).*?[\)\]]/gi, '')
-    .replace(/\s*-\s*(deluxe|remix|remaster|edit|version|extended|radio|acoustic|live|instrumental|explicit).*$/gi, '')
+    .trim()
+    // Remove content in parentheses/brackets that contains keywords
+    .replace(new RegExp(`\\s*[\\(\\[].*?(${keywords}).*?[\\)\\]]`, 'gi'), '')
+    // Remove dash-separated suffixes with keywords (with or without spaces around dash)
+    .replace(new RegExp(`\\s*-\\s*(${keywords}).*$`, 'gi'), '')
+    .replace(new RegExp(`-(${keywords}).*$`, 'gi'), '') // Handle no-space format like "Song-Deluxe"
+    // Remove any trailing separators/punctuation
+    .replace(/[\s\-–—]+$/g, '')
+    // Normalize multiple spaces to single space
     .replace(/\s+/g, ' ')
     .trim()
 }

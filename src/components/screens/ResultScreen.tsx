@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Trophy, Target, Zap, Home, RefreshCw, Share2, TrendingUp, Download, Instagram, MessageCircle, X } from 'lucide-react'
+import { Trophy, Target, Zap, Home, Share2, TrendingUp, Download, Instagram, MessageCircle, X } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Container from '../ui/Container'
@@ -278,7 +278,7 @@ export default function ResultScreen() {
 
           {/* Action Buttons */}
           <motion.div
-            className="grid grid-cols-1 md:grid-cols-3 gap-md"
+            className="grid grid-cols-1 md:grid-cols-2 gap-md"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.0 }}
@@ -286,10 +286,6 @@ export default function ResultScreen() {
             <Button variant="ghost" onClick={() => navigate('/')}>
               <Home className="w-5 h-5 mr-sm" />
               Home
-            </Button>
-            <Button variant="secondary" onClick={() => navigate('/game', { state: { mode: result.mode, playAgain: true } })}>
-              <RefreshCw className="w-5 h-5 mr-sm" />
-              Play Again
             </Button>
             <div className="relative">
               <Button variant="primary" onClick={() => setShowShareMenu(!showShareMenu)}>

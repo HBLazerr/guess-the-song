@@ -12,6 +12,15 @@ export interface SpotifyUser {
 // Game types
 export type GameMode = 'artist' | 'album' | 'genre'
 
+export type RoundSetting = 'short' | 'standard' | 'long' | 'max'
+export type TimeSetting = 'quick' | 'normal' | 'relaxed'
+
+export interface GameSettings {
+  rounds: RoundSetting
+  timePerRound: TimeSetting
+  allowPause: boolean
+}
+
 export interface GameSession {
   sessionId: string
   userId: string
