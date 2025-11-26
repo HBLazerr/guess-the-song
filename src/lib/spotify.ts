@@ -36,7 +36,7 @@ export async function redirectToSpotifyAuth() {
   window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`
 }
 
-export async function handleSpotifyCallback(code: string): Promise<string> {
+export async function handleSpotifyCallback(code: string): Promise<{ accessToken: string; expiresIn: number }> {
   const codeVerifier = localStorage.getItem('spotify_code_verifier')
 
   if (!codeVerifier) {
@@ -75,12 +75,14 @@ export async function handleSpotifyCallback(code: string): Promise<string> {
 
   console.log('Access token received, expires in:', expiresIn, 'seconds')
 
-  // Store token and expiry
-  localStorage.setItem('spotify_access_token', accessToken)
-  localStorage.setItem('spotify_token_expiry', (Date.now() + expiresIn * 1000).toString())
+  // Clean up code verifier
   localStorage.removeItem('spotify_code_verifier')
 
-  return accessToken
+  // Return token data (let caller handle storage)
+  return {
+    accessToken,
+    expiresIn
+  }
 }
 
 export function getAccessToken(): string | null {

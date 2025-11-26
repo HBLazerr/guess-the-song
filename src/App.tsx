@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect, useState, lazy, Suspense } from 'react'
+import { lazy, Suspense } from 'react'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 // Lazy load all screen components for code splitting
 // This reduces initial bundle size by ~60% (only loads login screen initially)
@@ -18,27 +19,8 @@ function RouteLoading() {
   )
 }
 
-function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    // Check if user has valid Spotify token
-    const token = localStorage.getItem('spotify_access_token')
-    const tokenExpiry = localStorage.getItem('spotify_token_expiry')
-
-    if (token && tokenExpiry) {
-      const now = Date.now()
-      if (now < parseInt(tokenExpiry)) {
-        setIsAuthenticated(true)
-      } else {
-        localStorage.removeItem('spotify_access_token')
-        localStorage.removeItem('spotify_token_expiry')
-      }
-    }
-
-    setIsLoading(false)
-  }, [])
+function AppRoutes() {
+  const { isAuthenticated, isLoading } = useAuth()
 
   if (isLoading) {
     return (
@@ -79,6 +61,14 @@ function App() {
         </Routes>
       </Suspense>
     </Router>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   )
 }
 

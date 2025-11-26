@@ -10,13 +10,14 @@ import BrowseSelection, { type BrowseOption } from '../BrowseSelection'
 import LiquidEther from '../LiquidEther'
 import { useSpotify } from '@/hooks/useSpotify'
 import { useSpotifyData } from '@/hooks/useSpotifyData'
-import { logout } from '@/lib/spotify'
+import { useAuth } from '@/contexts/AuthContext'
 import { loadStats, getBestArtist, getAverageReactionTime, getLastGameStats } from '@/lib/stats'
 import type { GameMode, SpotifyArtist, SpotifyAlbum } from '@/types'
 
 export default function HomeScreen() {
   const navigate = useNavigate()
   const { user } = useSpotify()
+  const { logout } = useAuth()
   const [selectedMode, setSelectedMode] = useState<GameMode | null>(null)
   const [isPremium, setIsPremium] = useState<boolean | null>(null)
 
@@ -117,6 +118,7 @@ export default function HomeScreen() {
 
   const handleLogout = () => {
     logout()
+    navigate('/login')
   }
 
   return (

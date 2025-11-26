@@ -6,11 +6,13 @@ import Button from '../ui/Button'
 import Container from '../ui/Container'
 import LiquidEther from '../LiquidEther'
 import { redirectToSpotifyAuth, handleSpotifyCallback, clearAuthData } from '@/lib/spotify'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function LoginScreen() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const processingRef = useRef(false)
+  const { login } = useAuth()
 
   useEffect(() => {
     // Handle OAuth callback
@@ -22,8 +24,7 @@ export default function LoginScreen() {
       // Clear any existing auth data to prevent continuing with stale tokens
       clearAuthData()
       alert(`Authorization failed: ${error}`)
-      // Force page reload to update auth state
-      window.location.href = '/login'
+      navigate('/login', { replace: true })
       return
     }
 
@@ -33,10 +34,10 @@ export default function LoginScreen() {
       console.log('Processing Spotify callback...')
 
       handleSpotifyCallback(code)
-        .then(() => {
+        .then(({ accessToken, expiresIn }) => {
           console.log('Authentication successful!')
-          // Force reload to update auth state
-          window.location.href = '/'
+          login(accessToken, expiresIn)
+          navigate('/', { replace: true })
         })
         .catch((error) => {
           console.error('Failed to authenticate:', error)
@@ -44,11 +45,10 @@ export default function LoginScreen() {
           clearAuthData()
           alert(`Authentication failed: ${error.message}`)
           processingRef.current = false // Reset on error so user can retry
-          // Force page reload to update auth state
-          window.location.href = '/login'
+          navigate('/login', { replace: true })
         })
     }
-  }, [searchParams, navigate])
+  }, [searchParams, navigate, login])
 
   const handleLogin = () => {
     redirectToSpotifyAuth()
