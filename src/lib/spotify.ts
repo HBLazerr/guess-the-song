@@ -1,7 +1,7 @@
 import { generateRandomString, generateCodeChallenge } from './utils'
 
 const CLIENT_ID = import.meta.env.VITE_SPOTIFY_CLIENT_ID
-const REDIRECT_URI = import.meta.env.VITE_SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:5173/callback'
+const REDIRECT_URI = (import.meta.env.VITE_SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:5173/callback').trim()
 const SCOPES = [
   'user-top-read',
   'user-read-playback-position',
@@ -103,4 +103,10 @@ export function logout() {
   localStorage.removeItem('spotify_token_expiry')
   localStorage.removeItem('spotify_code_verifier')
   window.location.href = '/login'
+}
+
+export function clearAuthData() {
+  localStorage.removeItem('spotify_access_token')
+  localStorage.removeItem('spotify_token_expiry')
+  localStorage.removeItem('spotify_code_verifier')
 }

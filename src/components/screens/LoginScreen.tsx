@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { Music } from 'lucide-react'
 import Button from '../ui/Button'
 import Container from '../ui/Container'
-import { redirectToSpotifyAuth, handleSpotifyCallback } from '@/lib/spotify'
+import { redirectToSpotifyAuth, handleSpotifyCallback, clearAuthData } from '@/lib/spotify'
 
 export default function LoginScreen() {
   const navigate = useNavigate()
@@ -18,8 +18,11 @@ export default function LoginScreen() {
 
     if (error) {
       console.error('Spotify authorization error:', error)
+      // Clear any existing auth data to prevent continuing with stale tokens
+      clearAuthData()
       alert(`Authorization failed: ${error}`)
-      navigate('/login', { replace: true })
+      // Force page reload to update auth state
+      window.location.href = '/login'
       return
     }
 
@@ -36,9 +39,12 @@ export default function LoginScreen() {
         })
         .catch((error) => {
           console.error('Failed to authenticate:', error)
+          // Clear any existing auth data to prevent continuing with stale tokens
+          clearAuthData()
           alert(`Authentication failed: ${error.message}`)
           processingRef.current = false // Reset on error so user can retry
-          navigate('/login', { replace: true })
+          // Force page reload to update auth state
+          window.location.href = '/login'
         })
     }
   }, [searchParams, navigate])

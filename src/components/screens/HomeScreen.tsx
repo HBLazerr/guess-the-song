@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Music, Radio, LogOut, Crown, ArrowLeft, Trophy, Target, Zap, Sparkles, Clock } from 'lucide-react'
+import { Music, Radio, LogOut, Crown, ArrowLeft, Trophy, Target, Sparkles, Clock } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Container from '../ui/Container'

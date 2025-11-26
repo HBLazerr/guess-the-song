@@ -11,7 +11,7 @@ interface ImportMeta {
 
 // Spotify Web Playback SDK Types
 interface Window {
-  onSpotifyWebPlaybackSDKReady: () => void
+  onSpotifyWebPlaybackSDKReady: (() => void) | null
   Spotify: typeof Spotify
 }
 
