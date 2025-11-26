@@ -201,7 +201,7 @@ export function useGameLogic(tracks: Track[], mode: GameMode, settings: GameSett
     })
 
     const newStreak = isCorrect ? streak + 1 : 0
-    const points = calculateScore(isCorrect, timeRemaining, ROUND_TIME, streak)
+    const points = isCorrect ? calculateScore(timeRemaining, ROUND_TIME, streak) : 0
 
     // Update streak
     setStreak(newStreak)

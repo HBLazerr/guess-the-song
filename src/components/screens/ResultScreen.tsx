@@ -5,6 +5,7 @@ import { Trophy, Target, Zap, Home, Share2, TrendingUp, Download, Instagram, Mes
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Container from '../ui/Container'
+import LiquidEther from '../LiquidEther'
 import { updateStatsWithGameResult, loadStats } from '@/lib/stats'
 import { generateResultImage, saveImageToDevice, shareToInstagramStory, shareToInstagramDM } from '@/lib/shareUtils'
 import { cn } from '@/lib/utils'
@@ -126,8 +127,21 @@ export default function ResultScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-lg">
-      <Container className="max-w-4xl">
+    <div className="min-h-screen bg-background flex items-center justify-center p-lg relative">
+      {/* Animated background */}
+      <div className="absolute inset-0 opacity-35">
+        <LiquidEther
+          colors={['#1DB954', '#1ed760', '#169c46']}
+          mouseForce={15}
+          cursorSize={80}
+          autoDemo={true}
+          autoSpeed={0.25}
+          autoIntensity={1.2}
+        />
+      </div>
+
+      {/* Content */}
+      <Container className="max-w-4xl relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

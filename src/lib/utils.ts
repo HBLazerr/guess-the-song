@@ -1,144 +1,65 @@
-import { type ClassValue, clsx } from 'clsx'
-import { twMerge } from 'tailwind-merge'
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Generate a random string for PKCE
+// PKCE helpers for Spotify OAuth
 export function generateRandomString(length: number): string {
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   const values = crypto.getRandomValues(new Uint8Array(length))
   return values.reduce((acc, x) => acc + possible[x % possible.length], '')
 }
 
-// Generate code challenge for PKCE
 export async function generateCodeChallenge(codeVerifier: string): Promise<string> {
   const data = new TextEncoder().encode(codeVerifier)
   const digest = await crypto.subtle.digest('SHA-256', data)
   return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/=/g, '')
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
+    .replace(/=+$/, '')
 }
 
-// Shuffle array
+// Array shuffling utility
 export function shuffleArray<T>(array: T[]): T[] {
-  const newArray = [...array]
-  for (let i = newArray.length - 1; i > 0; i--) {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]]
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
-  return newArray
+  return shuffled
 }
 
-// Calculate score based on time remaining
+// Scoring algorithm
 export function calculateScore(
-  isCorrect: boolean,
   timeRemaining: number,
   totalTime: number,
-  currentStreak: number
+  streak: number
 ): number {
-  if (!isCorrect) return 0
-
   const basePoints = 100
-  const timeBonus = (timeRemaining / totalTime) * 50
-  const streakBonus = currentStreak * 10
-
-  return Math.round(basePoints + timeBonus + streakBonus)
+  const timeBonus = Math.round((timeRemaining / totalTime) * 50)
+  const streakBonus = streak * 10
+  return basePoints + timeBonus + streakBonus
 }
 
-// Format time in MM:SS
-export function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins}:${secs.toString().padStart(2, '0')}`
-}
-
-// Remove accents/diacritics from a string for accent-insensitive comparison
-// Example: "José" → "Jose", "Estás" → "Estas", "Mí" → "Mi"
-export function removeAccents(str: string): string {
-  return str
-    .normalize('NFD')  // Decompose characters (é → e + combining accent)
-    .replace(/[\u0300-\u036f]/g, '')  // Remove diacritical marks
-}
-
-// Normalize string for search - removes accents, apostrophes, and special chars
-// Example: "I'll" → "ill", "José's" → "joses", "Don't" → "dont"
-export function normalizeForSearch(str: string): string {
-  return str
-    .normalize('NFD')  // Decompose characters (é → e + combining accent)
-    .replace(/[\u0300-\u036f]/g, '')  // Remove diacritical marks
-    .replace(/['']/g, '')  // Remove apostrophes (both straight and curly)
-    .replace(/[^\w\s]/g, '')  // Remove all non-alphanumeric chars except spaces
-    .toLowerCase()
-    .trim()
-}
-
-// Normalize track name by removing common variations
-// Handles multiple formats: "Song - Deluxe", "Song (Deluxe)", "Song [Deluxe Edition]", "Song-Deluxe", etc.
+// Text normalization for song/artist matching
 export function normalizeTrackName(name: string): string {
-  const keywords = 'deluxe|remix|remaster|remastered|edit|edited|version|extended|radio|acoustic|live|instrumental|explicit|clean|bonus|track|edition|ep|single|demo|alternate|alt|feat\\.?|ft\\.?|featuring'
-
   return name
     .toLowerCase()
-    .trim()
-    // Remove content in parentheses/brackets that contains keywords
-    .replace(new RegExp(`\\s*[\\(\\[].*?(${keywords}).*?[\\)\\]]`, 'gi'), '')
-    // Remove dash-separated suffixes with keywords (with or without spaces around dash)
-    .replace(new RegExp(`\\s*-\\s*(${keywords}).*$`, 'gi'), '')
-    .replace(new RegExp(`-(${keywords}).*$`, 'gi'), '') // Handle no-space format like "Song-Deluxe"
-    // Remove any trailing separators/punctuation
-    .replace(/[\s\-–—]+$/g, '')
-    // Normalize multiple spaces to single space
-    .replace(/\s+/g, ' ')
+    .replace(/\s*\(.*?\)\s*/g, '') // Remove content in parentheses
+    .replace(/\s*\[.*?\]\s*/g, '') // Remove content in brackets
+    .replace(/[^\w\s]/g, '') // Remove special characters
+    .replace(/\s+/g, ' ') // Normalize whitespace
     .trim()
 }
 
-// Find the best segment to play from audio analysis
-export function findBestSegment(analysis: any): number {
-  if (!analysis || !analysis.sections || analysis.sections.length === 0) {
-    // Fallback: start at 30 seconds to skip intro
-    return 30
-  }
-
-  const sections = analysis.sections
-  const trackDuration = analysis.track?.duration || 180
-
-  // Filter out intro/outro sections
-  const MIN_START = 15 // Skip first 15 seconds (likely intro)
-  const MAX_START = trackDuration - 45 // Ensure we have 30+ seconds left to play
-
-  const validSections = sections.filter(
-    (section: any) => section.start >= MIN_START && section.start <= MAX_START
-  )
-
-  if (validSections.length === 0) {
-    // If no valid sections, start from 25% into the song
-    return Math.floor(trackDuration * 0.25)
-  }
-
-  // Find the section with highest "energy" (loudness + confidence)
-  // Loudness is typically negative (closer to 0 = louder)
-  // Confidence is 0-1 (higher = better)
-  let bestSection = validSections[0]
-  let bestScore = -Infinity
-
-  for (const section of validSections) {
-    // Normalize loudness (spotify loudness is typically -60 to 0)
-    const normalizedLoudness = (section.loudness + 60) / 60 // Scale to 0-1
-    const confidence = section.confidence || 0.5
-
-    // Weight loudness more heavily than confidence
-    const score = normalizedLoudness * 0.7 + confidence * 0.3
-
-    if (score > bestScore) {
-      bestScore = score
-      bestSection = section
-    }
-  }
-
-  console.log(`[Audio Analysis] Best segment: ${bestSection.start.toFixed(1)}s (loudness: ${bestSection.loudness.toFixed(1)}, confidence: ${bestSection.confidence.toFixed(2)})`)
-
-  return Math.floor(bestSection.start)
+// Normalize for search (accent-insensitive)
+export function normalizeForSearch(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .replace(/[^\w\s]/g, '')
+    .trim()
 }

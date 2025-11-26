@@ -5,6 +5,7 @@ import { ArrowLeft, Music, Clock, Pause } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
 import Container from '../ui/Container'
+import LiquidEther from '../LiquidEther'
 import {
   DEFAULT_SETTINGS,
   getAvailableRoundOptions,
@@ -140,8 +141,21 @@ export default function GameSettingsScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-lg">
-      <Container className="max-w-4xl">
+    <div className="min-h-screen bg-background flex items-center justify-center p-lg relative">
+      {/* Animated background */}
+      <div className="absolute inset-0 opacity-30">
+        <LiquidEther
+          colors={['#1DB954', '#1ed760', '#169c46']}
+          mouseForce={20}
+          cursorSize={100}
+          autoDemo={true}
+          autoSpeed={0.35}
+          autoIntensity={1.6}
+        />
+      </div>
+
+      {/* Content */}
+      <Container className="max-w-4xl relative z-10">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}

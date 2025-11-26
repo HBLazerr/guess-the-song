@@ -7,6 +7,7 @@ import Card from '../ui/Card'
 import Container from '../ui/Container'
 import StatsCard from '../ui/StatsCard'
 import BrowseSelection, { type BrowseOption } from '../BrowseSelection'
+import LiquidEther from '../LiquidEther'
 import { useSpotify } from '@/hooks/useSpotify'
 import { useSpotifyData } from '@/hooks/useSpotifyData'
 import { logout } from '@/lib/spotify'
@@ -119,8 +120,21 @@ export default function HomeScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-lg">
-      <Container className="max-w-4xl">
+    <div className="min-h-screen bg-background flex items-center justify-center p-lg relative">
+      {/* Animated background */}
+      <div className="absolute inset-0 opacity-30">
+        <LiquidEther
+          colors={['#1DB954', '#1ed760', '#169c46']}
+          mouseForce={20}
+          cursorSize={100}
+          autoDemo={true}
+          autoSpeed={0.4}
+          autoIntensity={1.5}
+        />
+      </div>
+
+      {/* Content */}
+      <Container className="max-w-4xl relative z-10">
         <AnimatePresence mode="wait">
           {showArtistSelect ? (
             /* Artist Selection Screen */

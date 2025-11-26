@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { Music } from 'lucide-react'
 import Button from '../ui/Button'
 import Container from '../ui/Container'
+import LiquidEther from '../LiquidEther'
 import { redirectToSpotifyAuth, handleSpotifyCallback, clearAuthData } from '@/lib/spotify'
 
 export default function LoginScreen() {
@@ -54,8 +55,21 @@ export default function LoginScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-lg">
-      <Container className="max-w-2xl">
+    <div className="min-h-screen bg-background flex items-center justify-center p-lg relative">
+      {/* Animated background */}
+      <div className="absolute inset-0 opacity-40">
+        <LiquidEther
+          colors={['#1DB954', '#1ed760', '#169c46']}
+          mouseForce={25}
+          cursorSize={120}
+          autoDemo={true}
+          autoSpeed={0.3}
+          autoIntensity={1.8}
+        />
+      </div>
+
+      {/* Content */}
+      <Container className="max-w-2xl relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

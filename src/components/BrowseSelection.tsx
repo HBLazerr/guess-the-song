@@ -66,7 +66,7 @@ export default function BrowseSelection({
   }
 
   return (
-    <div className={cn('flex flex-col h-full max-h-[600px]', className)}>
+    <div className={cn('flex flex-col w-full', className)}>
       {/* Header - Only show if search is enabled */}
       {showSearch && (
         <div className="mb-md">
@@ -101,7 +101,7 @@ export default function BrowseSelection({
       )}
 
       {/* Grid of Options */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+      <div className="w-full">
         {filteredOptions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-xl text-center">
             <Music className="w-16 h-16 text-white/30 mb-md" />

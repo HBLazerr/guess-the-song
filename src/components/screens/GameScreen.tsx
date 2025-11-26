@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Clock, Trophy, Zap, X, Mic, Grid3x3, ArrowLeft } from 'lucide-react'
 import Button from '../ui/Button'
 import Card from '../ui/Card'
@@ -12,6 +12,7 @@ import VoiceInput from '../VoiceInput'
 import SongGuessInput from '../SongGuessInput'
 import BrowseSelection from '../BrowseSelection'
 import AnswerReveal from '../AnswerReveal'
+import LiquidEther from '../LiquidEther'
 import type { BrowseOption } from '../BrowseSelection'
 import { useSpotify } from '@/hooks/useSpotify'
 import { useSpotifyPlayer } from '@/hooks/useSpotifyPlayer'
@@ -45,6 +46,10 @@ export default function GameScreen() {
   // Browse navigation state for two-step album→song selection (All Albums mode)
   const [browseView, setBrowseView] = useState<'albums' | 'songs'>('albums')
   const [selectedBrowseAlbum, setSelectedBrowseAlbum] = useState<BrowseOption | null>(null)
+
+  // Sticky header state
+  const [isSticky, setIsSticky] = useState(false)
+  const controlsRef = useRef<HTMLDivElement>(null)
 
   const fetchingRef = useRef(false)
   const hasStartedRef = useRef(false)
@@ -215,6 +220,27 @@ export default function GameScreen() {
     }
   }, [currentQuestion])
 
+  // Auto-scroll to top on round transition for better UX
+  useEffect(() => {
+    if (currentRound > 0 && !gameResult) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [currentRound, gameResult])
+
+  // Handle sticky header on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      if (controlsRef.current) {
+        const rect = controlsRef.current.getBoundingClientRect()
+        // Make sticky when the controls scroll past the top of viewport
+        setIsSticky(rect.top <= 0)
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
   // Navigate to results when game is complete
   useEffect(() => {
     if (gameResult) {
@@ -336,8 +362,21 @@ export default function GameScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-lg">
-      <Container className="max-w-4xl">
+    <div className="min-h-screen bg-background p-lg relative">
+      {/* Animated background */}
+      <div className="absolute inset-0 opacity-25">
+        <LiquidEther
+          colors={['#1DB954', '#1ed760', '#169c46']}
+          mouseForce={30}
+          cursorSize={150}
+          autoDemo={true}
+          autoSpeed={0.5}
+          autoIntensity={2.0}
+        />
+      </div>
+
+      {/* Content */}
+      <Container className="max-w-4xl relative z-10 py-lg">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -356,7 +395,7 @@ export default function GameScreen() {
               </Button>
               <div className="flex items-center gap-sm">
                 <Trophy className="w-5 h-5 text-primary" />
-                <span className="text-lg font-semibold">{score}</span>
+                <span className="text-lg font-semibold">{isNaN(score) ? 0 : score}</span>
               </div>
               <div className="flex items-center gap-sm">
                 <Zap className="w-5 h-5 text-yellow-400" />
@@ -395,56 +434,117 @@ export default function GameScreen() {
           </div>
 
           {/* Dynamic Island Visualization */}
-          <Card
-            variant="glass"
-            className={`mb-xl ${gameSettings.allowPause && isPlaying && !showFeedback ? 'cursor-pointer' : ''}`}
-            onClick={() => {
-              if (gameSettings.allowPause && isPlaying && !showFeedback) {
-                if (isPaused) {
-                  resumeGame()
-                } else {
-                  pauseGame()
+          <div ref={controlsRef} className="relative mb-xl">
+            <Card
+              variant="glass"
+              className={`${gameSettings.allowPause && isPlaying && !showFeedback ? 'cursor-pointer' : ''}`}
+              onClick={() => {
+                if (gameSettings.allowPause && isPlaying && !showFeedback) {
+                  if (isPaused) {
+                    resumeGame()
+                  } else {
+                    pauseGame()
+                  }
                 }
-              }
-            }}
-          >
-            <div className="text-center py-xl">
-              <DynamicIslandVisualizer
-                isPlaying={isPlaying && !isPaused}
-                className="mb-md"
-              />
+              }}
+            >
+              <div className={`text-center transition-all duration-300 ${isSticky ? 'py-md' : 'py-xl'}`}>
+                <DynamicIslandVisualizer
+                  isPlaying={isPlaying && !isPaused}
+                  className={isSticky ? 'mb-0 scale-75' : 'mb-md'}
+                />
 
-              {/* Pause hint text - only show if pause is allowed */}
-              {isPlaying && gameSettings.allowPause && (
-                <motion.p
-                  className={`text-sm mb-lg ${
-                    isPaused ? 'text-yellow-400 font-medium' : 'text-white/50'
-                  }`}
-                  initial={{ opacity: 0 }}
-                  animate={{
-                    opacity: 1,
-                    scale: isPaused ? [1, 1.02, 1] : 1,
-                  }}
-                  transition={{
-                    opacity: { duration: 0.3 },
-                    scale: {
-                      duration: 1.5,
-                      repeat: isPaused ? Infinity : 0,
-                      ease: 'easeInOut',
-                    },
-                  }}
-                >
-                  {isPaused ? '⏸ Paused • Tap to resume' : 'Playing... (tap to pause)'}
-                </motion.p>
-              )}
+                {/* Pause hint text - only show if pause is allowed and not sticky */}
+                {isPlaying && gameSettings.allowPause && !isSticky && (
+                  <motion.p
+                    className={`text-sm mb-lg ${
+                      isPaused ? 'text-yellow-400 font-medium' : 'text-white/50'
+                    }`}
+                    initial={{ opacity: 0 }}
+                    animate={{
+                      opacity: 1,
+                      scale: isPaused ? [1, 1.02, 1] : 1,
+                    }}
+                    transition={{
+                      opacity: { duration: 0.3 },
+                      scale: {
+                        duration: 1.5,
+                        repeat: isPaused ? Infinity : 0,
+                        ease: 'easeInOut',
+                      },
+                    }}
+                  >
+                    {isPaused ? '⏸ Paused • Tap to resume' : 'Playing... (tap to pause)'}
+                  </motion.p>
+                )}
 
-              <p className="text-xl font-semibold">
-                {mode === 'artist' && 'Who is the artist?'}
-                {mode === 'album' && 'What album is this from?'}
-                {mode === 'genre' && 'What is this track called?'}
-              </p>
-            </div>
-          </Card>
+                {!isSticky && (
+                  <p className="text-xl font-semibold">
+                    {mode === 'artist' && 'Who is the artist?'}
+                    {mode === 'album' && 'What album is this from?'}
+                    {mode === 'genre' && 'What is this track called?'}
+                  </p>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          {/* Sticky header version */}
+          <AnimatePresence>
+            {isSticky && (
+              <motion.div
+                initial={{ y: -100, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -100, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-lg border-b border-white/10 px-lg py-md"
+              >
+                <div className="max-w-4xl mx-auto flex items-center justify-between gap-md">
+                  <div className="flex items-center gap-md flex-1">
+                    <div
+                      className={`${gameSettings.allowPause && isPlaying && !showFeedback ? 'cursor-pointer' : ''}`}
+                      onClick={() => {
+                        if (gameSettings.allowPause && isPlaying && !showFeedback) {
+                          if (isPaused) {
+                            resumeGame()
+                          } else {
+                            pauseGame()
+                          }
+                        }
+                      }}
+                    >
+                      <DynamicIslandVisualizer
+                        isPlaying={isPlaying && !isPaused}
+                        className="scale-50"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">
+                        {mode === 'artist' && 'Who is the artist?'}
+                        {mode === 'album' && 'What album?'}
+                        {mode === 'genre' && 'Track name?'}
+                      </p>
+                      {isPaused && (
+                        <p className="text-xs text-yellow-400">⏸ Paused</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-md">
+                    <div className="flex items-center gap-sm">
+                      <Trophy className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-semibold">{isNaN(score) ? 0 : score}</span>
+                    </div>
+                    <div className="flex items-center gap-sm">
+                      <Clock className={`w-4 h-4 ${getTimerColor()}`} />
+                      <span className={`text-sm font-bold ${getTimerColor()}`}>
+                        {timeRemaining}s
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Input Method Toggle */}
           <div className="flex justify-center gap-sm mb-lg">
